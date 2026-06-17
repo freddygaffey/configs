@@ -25,13 +25,6 @@ quick plugin sync. Same tmux config and keybindings.
 curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap-lite.sh | bash
 ```
 
-On a bare Debian/Ubuntu box that has neither `curl` nor `git` yet, install curl
-first (prefix with `sudo` if not root), then run either command above:
-
-```sh
-apt-get update && apt-get install -y curl
-```
-
 Already have the repo cloned? Run the script directly instead:
 
 ```sh
