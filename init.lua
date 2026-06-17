@@ -273,7 +273,13 @@ require('lazy').setup({
       },
       auto_install = true,
       highlight = { enable = true },
-      indent = { enable = true },
+      -- Treesitter's indent module is experimental and breaks on the
+      -- half-typed (syntactically incomplete) code you have while editing —
+      -- which is why JS/TS lines didn't indent on <Enter>. Disable it for the
+      -- JS/TS family so Neovim's robust built-in indenter (GetTypescriptIndent
+      -- / GetJavascriptIndent) drives indentation instead, giving the
+      -- press-Enter-and-it-indents behaviour you get in Python.
+      indent = { enable = true, disable = { 'typescript', 'tsx', 'javascript' } },
     },
   },
 
