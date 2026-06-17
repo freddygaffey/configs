@@ -53,6 +53,15 @@ Same tmux config and keybindings; nothing to compile, plugin sync is quick.
 
 ## Removing it
 
+One command, no clone needed:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/uninstall.sh | bash -s -- --purge
+```
+
+Or from a local checkout:
+
 ```sh
 ./uninstall.sh           # remove symlinks, restore backups, clear nvim data
 ./uninstall.sh --purge   # also delete the cloned repo and the /opt nvim binary

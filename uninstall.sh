@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# uninstall.sh — reverse bootstrap.sh.
+# uninstall.sh — reverse bootstrap.sh / bootstrap-lite.sh.
 #
-#   ./uninstall.sh           remove symlinks, restore *.bak, clear nvim data
-#   ./uninstall.sh --purge   also delete the cloned repo and the nvim binary
-#                            installed into /opt by bootstrap.sh
+#   Remote (nothing cloned, or just want one command):
+#     curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/uninstall.sh | bash
+#     curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/uninstall.sh | bash -s -- --purge
+#   Local (already cloned):
+#     ./uninstall.sh           remove symlinks, restore *.bak, clear nvim data
+#     ./uninstall.sh --purge   also delete the cloned repo and the nvim binary
+#                              installed into /opt by bootstrap.sh
 #
 # It does NOT uninstall packages (tmux/fzf/ripgrep) or touch your git identity.
 set -euo pipefail
