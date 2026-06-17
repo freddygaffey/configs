@@ -14,7 +14,20 @@ o.number = true
 o.relativenumber = true
 o.mouse = 'a'
 o.showmode = false            -- lualine already shows the mode
-o.clipboard = 'unnamedplus'   -- use the system clipboard
+o.clipboard = 'unnamedplus'   -- yank/delete go to the system clipboard
+
+-- When working over SSH, route the clipboard through OSC 52 escape sequences so
+-- yanking (y) lands in the *local* machine's clipboard (needs nvim 0.10+).
+if os.getenv('SSH_TTY') then
+  local ok, osc52 = pcall(require, 'vim.ui.clipboard.osc52')
+  if ok then
+    vim.g.clipboard = {
+      name = 'OSC 52',
+      copy = { ['+'] = osc52.copy('+'), ['*'] = osc52.copy('*') },
+      paste = { ['+'] = osc52.paste('+'), ['*'] = osc52.paste('*') },
+    }
+  end
+end
 o.breakindent = true
 o.undofile = true             -- persistent undo
 o.ignorecase = true
