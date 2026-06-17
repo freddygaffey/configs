@@ -5,40 +5,39 @@ theme, one-command setup. Works on macOS and Linux servers.
 
 ## Setup on a new machine
 
-One command does everything (installs deps + a current Neovim, clones this repo,
-symlinks, sets up plugins). Works as root or with sudo:
+Pick one. Both install deps + a current Neovim, clone this repo, symlink the
+configs, and set up plugins. Re-running is safe — existing configs get backed up
+to `*.bak`. Works as root or with sudo.
+
+**Full** — the works: treesitter, LSP (mason), telescope + fzf-native. Best on a
+normal machine.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap.sh | bash
 ```
 
-On a bare Debian/Ubuntu box that has neither `curl` nor `git` yet:
-
-```sh
-apt-get update && apt-get install -y curl    # (prefix with sudo if not root)
-curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap.sh | bash
-```
-
-Already have the repo cloned? Just run it:
-
-```sh
-./bootstrap.sh
-```
-
-Re-running is safe — existing configs get backed up to `*.bak`.
-
-### Lite (tiny boxes, no compiling)
-
-On a 512 MB / 1 vCPU machine the full config's compile steps (treesitter
-parsers, fzf-native, LuaSnip, mason language servers) are slow and can OOM. Use
-the lite installer instead — it skips the build toolchain entirely and links a
-pure-Lua Neovim config (built-in syntax, telescope without fzf-native, no LSP):
+**Lite** — for tiny boxes (512 MB / 1 vCPU). Skips the build toolchain and links
+a pure-Lua Neovim config (built-in syntax, telescope without fzf-native, no
+treesitter/LSP) so **nothing compiles or downloads a language server** — no OOM,
+quick plugin sync. Same tmux config and keybindings.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap-lite.sh | bash
 ```
 
-Same tmux config and keybindings; nothing to compile, plugin sync is quick.
+On a bare Debian/Ubuntu box that has neither `curl` nor `git` yet, install curl
+first (prefix with `sudo` if not root), then run either command above:
+
+```sh
+apt-get update && apt-get install -y curl
+```
+
+Already have the repo cloned? Run the script directly instead:
+
+```sh
+./bootstrap.sh        # full
+./bootstrap-lite.sh   # lite
+```
 
 ## What you get
 
@@ -53,10 +52,13 @@ Same tmux config and keybindings; nothing to compile, plugin sync is quick.
 
 ## Removing it
 
-One command, no clone needed:
+Reverses either installer (full or lite). One command, no clone needed:
 
 ```sh
+# remove symlinks, restore *.bak backups, clear nvim data
 curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/uninstall.sh | bash
+
+# ...and also delete the cloned repo + the /opt nvim binary
 curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/uninstall.sh | bash -s -- --purge
 ```
 
