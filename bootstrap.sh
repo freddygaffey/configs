@@ -160,23 +160,6 @@ link() {  # link <target> <linkname>
 link "$DOTFILES"                 "$HOME/.config/nvim"
 link "$DOTFILES/tmux/tmux.conf"  "$HOME/.config/tmux/tmux.conf"
 
-# ── 3b. Nicer in-tmux shell prompt ─────────────────────────────────────
-# Source shell/prompt.sh from the shell rc. It only changes the prompt inside
-# tmux, so prompts outside tmux are untouched. Idempotent via a marker line.
-install_prompt() {
-  local marker='# configs: in-tmux prompt'
-  [ -e "$HOME/.bashrc" ] || touch "$HOME/.bashrc"
-  for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    [ -e "$rc" ] || continue
-    if ! grep -qF "$marker" "$rc" 2>/dev/null; then
-      printf '\n%s\n[ -f "%s/shell/prompt.sh" ] && . "%s/shell/prompt.sh"\n' \
-        "$marker" "$DOTFILES" "$DOTFILES" >> "$rc"
-      info "prompt: hooked into $rc"
-    fi
-  done
-}
-install_prompt
-
 # ── 4. Basic git identity (only if unset) ──────────────────────────────
 [ -z "$(git config --global user.name  || true)" ] && git config --global user.name  "$GIT_NAME"
 [ -z "$(git config --global user.email || true)" ] && git config --global user.email "$GIT_EMAIL"

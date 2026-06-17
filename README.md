@@ -42,7 +42,6 @@ Already have the repo cloned? Run the script directly instead:
 | `init.lua`          | Neovim — kickstart-flavored, lazy.nvim, LSP, telescope |
 | `lite/init.lua`     | Neovim — pure-Lua subset, no treesitter/LSP, no builds |
 | `tmux/tmux.conf`    | tmux — vim bindings, carbonfox statusline              |
-| `shell/prompt.sh`   | Minimal one-line prompt, applied only inside tmux      |
 
 ## Removing it
 

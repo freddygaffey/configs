@@ -36,17 +36,6 @@ unlink_restore() {
 unlink_restore "$HOME/.config/nvim"
 unlink_restore "$HOME/.config/tmux/tmux.conf"
 
-# Remove the in-tmux prompt hook (marker line + the source line after it).
-remove_prompt_hook() {
-  local marker='# configs: in-tmux prompt'
-  for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    [ -e "$rc" ] && grep -qF "$marker" "$rc" || continue
-    awk -v m="$marker" '$0==m {skip=2} skip>0 {skip--; next} {print}' "$rc" > "$rc.tmp" \
-      && mv "$rc.tmp" "$rc" && info "removed prompt hook from $rc"
-  done
-}
-remove_prompt_hook
-
 # Neovim plugin / state / cache data (safe to delete — regenerated on next run)
 for d in "$HOME/.local/share/nvim" "$HOME/.local/state/nvim" "$HOME/.cache/nvim"; do
   [ -e "$d" ] && { rm -rf "$d"; info "removed $d"; }
