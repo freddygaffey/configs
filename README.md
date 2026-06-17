@@ -81,6 +81,8 @@ tmux prefix = **`Ctrl-a`**.  nvim leader = **`Space`**.
 | `Ctrl-a v`, then `v`/`y` | copy mode → select → yank to clipboard|
 | `Ctrl-a r`               | reload tmux config                    |
 | `<Space>ff` / `<Space>fg`| nvim: find files / grep               |
+| `<Space>ft`              | nvim: list TODO/FIXME comments        |
+| `ysiw)` / `cs"'` / `ds(` | nvim: add / change / delete surround  |
 | `<Space>e` / `<Space>ef` | nvim: file explorer / reveal file     |
 | `<Space>th`              | nvim: theme picker (live preview)     |
 | `H` / `L`                | nvim: previous / next buffer          |

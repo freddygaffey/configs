@@ -180,6 +180,24 @@ require('lazy').setup({
   -- Which-key: shows pending keybinds in a popup
   { 'folke/which-key.nvim', event = 'VeryLazy', opts = {} },
 
+  -- Surround: add/change/delete surrounding pairs — ysiw), cs"', ds(
+  { 'kylechui/nvim-surround', version = '*', event = 'VeryLazy', opts = {} },
+
+  -- Indent guides: vertical lines marking each indent level
+  { 'lukas-reineke/indent-blankline.nvim', main = 'ibl', event = 'VeryLazy', opts = {} },
+
+  -- Highlight & search TODO / FIXME / HACK comments (<leader>ft lists them)
+  {
+    'folke/todo-comments.nvim',
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    event = 'VeryLazy',
+    opts = { signs = false },
+    config = function(_, opts)
+      require('todo-comments').setup(opts)
+      map('n', '<leader>ft', '<cmd>TodoTelescope<CR>', { desc = '[F]ind [T]ODOs' })
+    end,
+  },
+
   -- Fuzzy finder. No telescope-fzf-native here (that one needs `make`); the
   -- built-in Lua sorter is plenty fast for a single box, and live_grep still
   -- shells out to the ripgrep installed by bootstrap-lite.sh.
