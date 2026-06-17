@@ -147,11 +147,11 @@ map('n', '<leader>q', '<cmd>quit<CR>', { desc = '[Q]uit window' })
 map('n', '<C-s>', '<cmd>write<CR>', { desc = 'Save file' })
 
 -- Real nvim tab pages (separate from buffers/tmux windows).
--- <leader>] / <leader>[ move between them (built-in gt / gT also work).
+-- <leader>tr / <leader>tl move right/left between them (gt / gT also work).
 map('n', '<leader>tn', '<cmd>tabnew<CR>', { desc = '[T]ab [N]ew' })
 map('n', '<leader>tc', '<cmd>tabclose<CR>', { desc = '[T]ab [C]lose' })
-map('n', '<leader>]', '<cmd>tabnext<CR>', { desc = 'Next tab page' })
-map('n', '<leader>[', '<cmd>tabprevious<CR>', { desc = 'Previous tab page' })
+map('n', '<leader>tr', '<cmd>tabnext<CR>', { desc = '[T]ab [R]ight (next)' })
+map('n', '<leader>tl', '<cmd>tabprevious<CR>', { desc = '[T]ab [L]eft (previous)' })
 
 -- ────────────────────────── Bootstrap lazy.nvim ──────────────────────
 local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
