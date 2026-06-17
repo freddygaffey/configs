@@ -37,10 +37,13 @@ install_pkgs() {
     info "Installing packages via brew…"
     brew install $PKGS neovim
   elif command -v apt-get >/dev/null 2>&1; then
-    info "Updating package lists & upgrading via apt…"
-    $SUDO apt-get update -y
-    $SUDO DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+    # No `apt-get upgrade` here on purpose: a full upgrade can pull a new
+    # openssh-server, and dpkg then prompts about the cloud-init-modified
+    # sshd_config. Piped via `curl | bash` there's no TTY to answer, so it
+    # hangs or silently replaces sshd_config and locks you out over SSH.
+    # Run `sudo apt-get update && sudo apt-get upgrade` yourself if you want it.
     info "Installing packages via apt…"
+    $SUDO apt-get update -y
     $SUDO apt-get install -y $PKGS build-essential ca-certificates
     install_neovim_linux
   elif command -v dnf >/dev/null 2>&1; then
@@ -143,4 +146,7 @@ cat <<'DONE'
 
 ✓ Done. Start a session with:   tmux
   Prefix is Ctrl-a.  Editor: nvim.  Move with Ctrl-h/j/k/l.
+
+  Tip: this script does NOT run a system upgrade (it can clobber sshd_config
+  over SSH). To update the box yourself:  sudo apt-get update && sudo apt-get upgrade
 DONE
