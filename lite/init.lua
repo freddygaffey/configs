@@ -19,6 +19,12 @@
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
+-- ─────────────────────────────── Theme ───────────────────────────────
+-- Single place to change the colorscheme. Any nightfox variant works
+-- (carbonfox, nightfox, duskfox, nordfox, terafox, dayfox, dawnfox). The
+-- statusline (lualine) and the fuzzy finder (telescope) both follow this.
+local theme = 'carbonfox'
+
 -- ────────────────────────────── Options ──────────────────────────────
 local o = vim.opt
 o.number = true
@@ -111,7 +117,11 @@ require('lazy').setup({
   {
     'EdenEast/nightfox.nvim',
     priority = 1000,
-    config = function() vim.cmd.colorscheme('carbonfox') end,
+    config = function()
+      -- Enable the telescope integration so the picker matches the theme.
+      require('nightfox').setup({ integrations = { telescope = true } })
+      vim.cmd.colorscheme(theme)
+    end,
   },
 
   -- Seamless tmux <-> nvim navigation with Ctrl-h/j/k/l
@@ -130,7 +140,7 @@ require('lazy').setup({
   {
     'nvim-lualine/lualine.nvim',
     dependencies = { 'nvim-tree/nvim-web-devicons' },
-    opts = { options = { theme = 'carbonfox', section_separators = '', component_separators = '|' } },
+    opts = { options = { theme = theme, section_separators = '', component_separators = '|' } },
   },
 
   -- Bufferline: shows open files (buffers) as tabs along the top.
