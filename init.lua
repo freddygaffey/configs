@@ -153,7 +153,10 @@ require('lazy').setup({
     build = ':TSUpdate',
     main = 'nvim-treesitter.configs',
     opts = {
-      ensure_installed = { 'bash', 'c', 'lua', 'markdown', 'vim', 'vimdoc', 'python', 'json', 'yaml' },
+      ensure_installed = {
+        'bash', 'c', 'cpp', 'lua', 'markdown', 'markdown_inline', 'vim', 'vimdoc',
+        'python', 'json', 'yaml', 'typescript', 'javascript', 'tsx', 'vue', 'html', 'css',
+      },
       auto_install = true,
       highlight = { enable = true },
       indent = { enable = true },
@@ -182,7 +185,14 @@ require('lazy').setup({
         end,
       })
       require('mason-lspconfig').setup({
-        ensure_installed = { 'lua_ls', 'bashls' },
+        ensure_installed = {
+          'lua_ls', 'bashls',
+          'pyright',   -- Python
+          'clangd',    -- C and C++
+          'ts_ls',     -- TypeScript / JavaScript
+          'vue_ls',    -- Vue (SFCs)
+          'marksman',  -- Markdown
+        },
       })
     end,
   },
