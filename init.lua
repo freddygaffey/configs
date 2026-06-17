@@ -337,6 +337,8 @@ require('lazy').setup({
           ['<CR>'] = cmp.mapping.confirm({ select = true }),
           ['<Tab>'] = cmp.mapping.select_next_item(),
           ['<S-Tab>'] = cmp.mapping.select_prev_item(),
+          ['<C-j>'] = cmp.mapping.select_next_item(),  -- next entry
+          ['<C-k>'] = cmp.mapping.select_prev_item(),  -- previous entry
         }),
         sources = {
           { name = 'nvim_lsp' }, { name = 'luasnip' },
