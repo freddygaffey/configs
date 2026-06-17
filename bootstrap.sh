@@ -23,6 +23,35 @@ if [ "$(id -u)" -eq 0 ]; then SUDO=""; elif command -v sudo >/dev/null 2>&1; the
   warn "Not root and no sudo — package installs may fail."; SUDO=""
 fi
 
+# Never parallelize compiles — tiny boxes (512 MB / 1 vCPU) OOM otherwise.
+export MAKEFLAGS="-j1"
+
+# ── 0. Ensure swap exists ──────────────────────────────────────────────
+# A 512 MB droplet with no swap OOM-kills processes (often sshd) the moment
+# anything heavy runs — that's what keeps dropping your SSH session. A little
+# swap turns "killed" into "merely slow", so compiles and upgrades survive.
+ensure_swap() {
+  [ "$(uname)" = "Darwin" ] && return 0
+  if command -v swapon >/dev/null 2>&1 && [ -n "$(swapon --show=NAME --noheadings 2>/dev/null)" ]; then
+    info "Swap already present"; return 0
+  fi
+  if [ "$(id -u)" -ne 0 ] && [ -z "$SUDO" ]; then
+    warn "No swap and no root — can't add it; compiles may OOM."; return 0
+  fi
+  info "No swap found — creating 2G /swapfile…"
+  if $SUDO fallocate -l 2G /swapfile 2>/dev/null \
+     || $SUDO dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none 2>/dev/null; then
+    $SUDO chmod 600 /swapfile
+    $SUDO mkswap /swapfile >/dev/null 2>&1
+    $SUDO swapon /swapfile && info "2G swap enabled"
+    grep -q '/swapfile' /etc/fstab 2>/dev/null \
+      || echo '/swapfile none swap sw 0 0' | $SUDO tee -a /etc/fstab >/dev/null
+  else
+    warn "Could not create swapfile (low disk?) — compiles may OOM."
+  fi
+}
+ensure_swap
+
 # ── 1. Install packages ────────────────────────────────────────────────
 # Neovim is installed separately (below) from the official release on Linux,
 # because distro packages are usually too old for this config.
