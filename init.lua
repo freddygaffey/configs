@@ -136,6 +136,7 @@ require('lazy').setup({
   -- Treesitter: better syntax highlighting & indentation
   {
     'nvim-treesitter/nvim-treesitter',
+    branch = 'master', -- stable API; the default 'main' branch dropped .configs
     build = ':TSUpdate',
     main = 'nvim-treesitter.configs',
     opts = {
