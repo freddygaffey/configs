@@ -87,7 +87,8 @@ tmux prefix = **`Ctrl-a`**.  nvim leader = **`Space`**.
 | `<Space>th`              | nvim: theme picker (live preview)     |
 | `H` / `L`                | nvim: previous / next buffer          |
 | `<Space>w` / `<Space>q`  | nvim: save / quit                     |
-| `gt` / `gT`              | nvim: next / previous tab page        |
+| `<Space>tn` / `<Space>tc`| nvim: new / close tab page            |
+| `<Space>]` / `<Space>[`  | nvim: next / previous tab page (or `gt`/`gT`) |
 | `jk`                     | nvim: exit insert mode                |
 
 Linux clipboard needs `xclip` (X11) or `wl-clipboard` (Wayland); macOS uses the

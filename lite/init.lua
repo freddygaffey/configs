@@ -25,6 +25,54 @@ vim.g.maplocalleader = ' '
 -- statusline (lualine) and the fuzzy finder (telescope) both follow this.
 local theme = 'carbonfox'
 
+-- ─── Keep tmux's colours in sync with the nvim theme ──────────────────
+-- When running inside tmux, push the active colorscheme's colours into tmux on
+-- every ColorScheme event — so switching theme (incl. the <leader>th live
+-- preview) re-themes the status bar and borders too. tmux.conf holds a static
+-- carbonfox baseline for when nvim isn't running.
+local function hl(name, attr)
+  local ok, c = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+  if ok and c and c[attr] then return string.format('#%06x', c[attr]) end
+end
+local function darken(hex, factor)
+  if not hex then return nil end
+  local r = math.floor(tonumber(hex:sub(2, 3), 16) * factor)
+  local g = math.floor(tonumber(hex:sub(4, 5), 16) * factor)
+  local b = math.floor(tonumber(hex:sub(6, 7), 16) * factor)
+  return string.format('#%02x%02x%02x', r, g, b)
+end
+local function sync_tmux_theme()
+  if not vim.env.TMUX then return end
+  local bg      = hl('Normal', 'bg')           or '#161616'
+  local fg      = hl('Normal', 'fg')           or '#f2f4f8'
+  local accent  = hl('Function', 'fg')         or '#78a9ff'
+  local accent2 = hl('Constant', 'fg')         or accent
+  local red     = hl('DiagnosticError', 'fg')  or '#ee5396'
+  local dim     = hl('Comment', 'fg')          or '#6b6b6b'
+  local panel   = hl('CursorLine', 'bg')       or '#2a2a2a'
+  local bgdim   = darken(bg, 0.6)              or '#0d0d0d'
+  local opts = {
+    { 'status-style',                 ('bg=%s,fg=%s'):format(bg, fg) },
+    { 'status-left',                  ('#[bg=%s,fg=%s,bold] #S #[bg=%s]'):format(accent, bg, bg) },
+    { 'status-right',                 ('#{?client_prefix,#[fg=%s]PREFIX ,}#[fg=%s]%%a %%d %%b #[fg=%s]%%H:%%M '):format(red, accent2, accent) },
+    { 'window-status-format',         ('#[fg=%s] #I #W '):format(dim) },
+    { 'window-status-current-format', ('#[bg=%s,fg=%s,bold] #I #W '):format(panel, accent) },
+    { 'pane-border-style',            ('fg=%s'):format(panel) },
+    { 'pane-active-border-style',     ('fg=%s'):format(accent) },
+    { 'message-style',                ('bg=%s,fg=%s'):format(panel, fg) },
+    { 'mode-style',                   ('bg=%s,fg=%s'):format(accent, bg) },
+    { 'window-style',                 ('fg=%s,bg=%s'):format(dim, bgdim) },
+    { 'window-active-style',          ('fg=%s,bg=%s'):format(fg, bg) },
+  }
+  local args = { 'tmux' }
+  for i, o in ipairs(opts) do
+    if i > 1 then table.insert(args, ';') end
+    vim.list_extend(args, { 'set', '-g', o[1], o[2] })
+  end
+  vim.fn.system(args)
+end
+vim.api.nvim_create_autocmd('ColorScheme', { callback = sync_tmux_theme })
+
 -- ────────────────────────────── Options ──────────────────────────────
 local o = vim.opt
 o.number = true
@@ -99,9 +147,11 @@ map('n', '<leader>q', '<cmd>quit<CR>', { desc = '[Q]uit window' })
 map('n', '<C-s>', '<cmd>write<CR>', { desc = 'Save file' })
 
 -- Real nvim tab pages (separate from buffers/tmux windows).
--- Cycle them with the built-in gt / gT.
+-- <leader>] / <leader>[ move between them (built-in gt / gT also work).
 map('n', '<leader>tn', '<cmd>tabnew<CR>', { desc = '[T]ab [N]ew' })
 map('n', '<leader>tc', '<cmd>tabclose<CR>', { desc = '[T]ab [C]lose' })
+map('n', '<leader>]', '<cmd>tabnext<CR>', { desc = 'Next tab page' })
+map('n', '<leader>[', '<cmd>tabprevious<CR>', { desc = 'Previous tab page' })
 
 -- ────────────────────────── Bootstrap lazy.nvim ──────────────────────
 local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
