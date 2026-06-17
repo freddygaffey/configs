@@ -102,6 +102,15 @@ o.shiftwidth = 2
 o.expandtab = true
 o.swapfile = false
 
+-- Folding: driven by treesitter so folds follow real code structure.
+-- foldlevel 99 means files open fully expanded — fold on demand with the
+-- standard keys: za toggle, zc/zo close/open, zM close all, zR open all.
+o.foldmethod = 'expr'
+o.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+o.foldtext = ''
+o.foldlevel = 99
+o.foldlevelstart = 99
+
 -- ────────────────────────────── Keymaps ──────────────────────────────
 local map = vim.keymap.set
 map('i', 'jk', '<Esc>', { desc = 'Exit insert mode' })
@@ -169,6 +178,15 @@ require('lazy').setup({
       { '<C-j>', '<cmd>TmuxNavigateDown<cr>' },
       { '<C-k>', '<cmd>TmuxNavigateUp<cr>' },
       { '<C-l>', '<cmd>TmuxNavigateRight<cr>' },
+    },
+  },
+
+  -- Split maximize/restore toggle (like the old config): <leader>sm zooms the
+  -- current split to fill the screen, press again to restore the layout.
+  {
+    'szw/vim-maximizer',
+    keys = {
+      { '<leader>sm', '<cmd>MaximizerToggle<CR>', desc = '[S]plit [M]aximize/restore' },
     },
   },
 
