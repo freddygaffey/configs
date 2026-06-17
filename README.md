@@ -82,6 +82,7 @@ tmux prefix = **`Ctrl-a`**.  nvim leader = **`Space`**.
 | `Ctrl-a r`               | reload tmux config                    |
 | `<Space>ff` / `<Space>fg`| nvim: find files / grep               |
 | `<Space>e` / `<Space>ef` | nvim: file explorer / reveal file     |
+| `<Space>th`              | nvim: theme picker (live preview)     |
 | `H` / `L`                | nvim: previous / next buffer          |
 | `<Space>w` / `<Space>q`  | nvim: save / quit                     |
 | `gt` / `gT`              | nvim: next / previous tab page        |

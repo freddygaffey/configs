@@ -184,6 +184,11 @@ require('lazy').setup({
       map('n', '<leader>fb', b.buffers, { desc = '[F]ind [B]uffers' })
       map('n', '<leader>fh', b.help_tags, { desc = '[F]ind [H]elp' })
       map('n', '<leader>fr', b.oldfiles, { desc = '[F]ind [R]ecent' })
+      -- Theme picker: scroll the list to preview each colorscheme live,
+      -- <CR> applies it for this session. Make it permanent by setting the
+      -- `theme` variable near the top of this file.
+      map('n', '<leader>th', function() b.colorscheme({ enable_preview = true }) end,
+        { desc = '[T]heme picker (live preview)' })
     end,
   },
 
