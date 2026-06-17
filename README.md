@@ -27,14 +27,29 @@ Already have the repo cloned? Just run it:
 
 Re-running is safe — existing configs get backed up to `*.bak`.
 
+### Lite (tiny boxes, no compiling)
+
+On a 512 MB / 1 vCPU machine the full config's compile steps (treesitter
+parsers, fzf-native, LuaSnip, mason language servers) are slow and can OOM. Use
+the lite installer instead — it skips the build toolchain entirely and links a
+pure-Lua Neovim config (built-in syntax, telescope without fzf-native, no LSP):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap-lite.sh | bash
+```
+
+Same tmux config and keybindings; nothing to compile, plugin sync is quick.
+
 ## What you get
 
-| Path             | What                                                   |
-|------------------|--------------------------------------------------------|
-| `bootstrap.sh`   | The installer (macOS/apt/dnf/pacman)                    |
-| `uninstall.sh`   | Reverse it (`--purge` also removes repo + nvim binary) |
-| `init.lua`       | Neovim — kickstart-flavored, lazy.nvim, LSP, telescope |
-| `tmux/tmux.conf` | tmux — vim bindings, carbonfox statusline              |
+| Path                | What                                                   |
+|---------------------|--------------------------------------------------------|
+| [`bootstrap.sh`](bootstrap.sh)           | The installer (macOS/apt/dnf/pacman)        |
+| [`bootstrap-lite.sh`](bootstrap-lite.sh) | No-compile installer for tiny boxes         |
+| `uninstall.sh`      | Reverse it (`--purge` also removes repo + nvim binary) |
+| `init.lua`          | Neovim — kickstart-flavored, lazy.nvim, LSP, telescope |
+| `lite/init.lua`     | Neovim — pure-Lua subset, no treesitter/LSP, no builds |
+| `tmux/tmux.conf`    | tmux — vim bindings, carbonfox statusline              |
 
 ## Removing it
 

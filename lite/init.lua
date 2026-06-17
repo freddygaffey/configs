@@ -1,0 +1,163 @@
+--[[ lite/init.lua — no-compile Neovim config for tiny boxes
+  Same options/keymaps and look as the full config, but every plugin here is
+  pure Lua: nothing builds a C parser, runs `make`, or downloads a language
+  server. That means no build-essential, no OOM on a 512 MB / 1 vCPU box, and
+  `nvim --headless +Lazy! sync` finishes in seconds.
+
+  Dropped vs the full config (all of these compile or download binaries):
+    • nvim-treesitter        (build = ':TSUpdate' compiles a parser per lang)
+    • telescope-fzf-native   (build = 'make')
+    • LuaSnip                (build = 'make install_jsregexp')
+    • nvim-cmp               (only useful with LSP/snippets, dropped with them)
+    • mason + nvim-lspconfig (downloads/builds language servers)
+
+  Syntax highlighting falls back to Neovim's built-in regex syntax (no compile).
+  Theme: carbonfox.  Pairs with tmux (Ctrl-h/j/k/l navigation).
+--]]
+
+-- Leader must be set before plugins load.
+vim.g.mapleader = ' '
+vim.g.maplocalleader = ' '
+
+-- ────────────────────────────── Options ──────────────────────────────
+local o = vim.opt
+o.number = true
+o.relativenumber = true
+o.mouse = 'a'
+o.showmode = false            -- lualine already shows the mode
+o.clipboard = 'unnamedplus'   -- yank/delete go to the system clipboard
+
+-- When working over SSH, route the clipboard through OSC 52 escape sequences so
+-- yanking (y) lands in the *local* machine's clipboard (needs nvim 0.10+).
+if os.getenv('SSH_TTY') then
+  local ok, osc52 = pcall(require, 'vim.ui.clipboard.osc52')
+  if ok then
+    vim.g.clipboard = {
+      name = 'OSC 52',
+      copy = { ['+'] = osc52.copy('+'), ['*'] = osc52.copy('*') },
+      paste = { ['+'] = osc52.paste('+'), ['*'] = osc52.paste('*') },
+    }
+  end
+end
+o.breakindent = true
+o.undofile = true             -- persistent undo
+o.ignorecase = true
+o.smartcase = true
+o.signcolumn = 'yes'
+o.updatetime = 250
+o.timeoutlen = 400
+o.splitright = true
+o.splitbelow = true
+o.list = true
+o.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
+o.inccommand = 'split'        -- live preview of :substitute
+o.cursorline = true
+o.scrolloff = 8
+o.termguicolors = true
+o.tabstop = 2
+o.shiftwidth = 2
+o.expandtab = true
+o.swapfile = false
+
+-- Built-in syntax highlighting (no treesitter on the lite build).
+vim.cmd('syntax enable')
+
+-- ────────────────────────────── Keymaps ──────────────────────────────
+local map = vim.keymap.set
+map('i', 'jk', '<Esc>', { desc = 'Exit insert mode' })
+map('n', '<Esc>', '<cmd>nohlsearch<CR>', { desc = 'Clear search highlight' })
+
+-- Splits (same scheme as tmux)
+map('n', '<leader>sv', '<C-w>v', { desc = '[S]plit [V]ertical' })
+map('n', '<leader>sh', '<C-w>s', { desc = '[S]plit [H]orizontal' })
+map('n', '<leader>se', '<C-w>=', { desc = '[S]plit [E]qual size' })
+map('n', '<leader>sx', '<cmd>close<CR>', { desc = '[S]plit close' })
+
+-- Move selected lines (visual mode)
+map('v', 'J', ":m '>+1<CR>gv=gv", { desc = 'Move selection down' })
+map('v', 'K', ":m '<-2<CR>gv=gv", { desc = 'Move selection up' })
+
+-- Buffers act as nvim's "tabs" (tmux windows are the real tabs).
+-- H / L cycle buffers; <leader>bd closes the current one.
+map('n', '<S-h>', '<cmd>bprevious<CR>', { desc = 'Previous buffer' })
+map('n', '<S-l>', '<cmd>bnext<CR>', { desc = 'Next buffer' })
+map('n', '<leader>bd', '<cmd>bdelete<CR>', { desc = '[B]uffer [D]elete' })
+
+-- ────────────────────────── Bootstrap lazy.nvim ──────────────────────
+local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
+  vim.fn.system({ 'git', 'clone', '--filter=blob:none', '--branch=stable',
+    'https://github.com/folke/lazy.nvim.git', lazypath })
+end
+vim.opt.rtp:prepend(lazypath)
+
+-- ──────────────────────── Plugins (pure Lua only) ────────────────────
+require('lazy').setup({
+  -- Theme to match tmux
+  {
+    'EdenEast/nightfox.nvim',
+    priority = 1000,
+    config = function() vim.cmd.colorscheme('carbonfox') end,
+  },
+
+  -- Seamless tmux <-> nvim navigation with Ctrl-h/j/k/l
+  {
+    'christoomey/vim-tmux-navigator',
+    cmd = { 'TmuxNavigateLeft', 'TmuxNavigateDown', 'TmuxNavigateUp', 'TmuxNavigateRight' },
+    keys = {
+      { '<C-h>', '<cmd>TmuxNavigateLeft<cr>' },
+      { '<C-j>', '<cmd>TmuxNavigateDown<cr>' },
+      { '<C-k>', '<cmd>TmuxNavigateUp<cr>' },
+      { '<C-l>', '<cmd>TmuxNavigateRight<cr>' },
+    },
+  },
+
+  -- Statusline
+  {
+    'nvim-lualine/lualine.nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    opts = { options = { theme = 'carbonfox', section_separators = '', component_separators = '|' } },
+  },
+
+  -- Bufferline: shows open files (buffers) as tabs along the top.
+  {
+    'akinsho/bufferline.nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    event = 'VeryLazy',
+    opts = { options = { show_buffer_close_icons = false } },
+  },
+
+  -- Git change signs in the gutter
+  { 'lewis6991/gitsigns.nvim', opts = {} },
+
+  -- Comment with gcc / gc (visual)
+  { 'numToStr/Comment.nvim', opts = {} },
+
+  -- Auto-close brackets/quotes
+  { 'windwp/nvim-autopairs', event = 'InsertEnter', opts = {} },
+
+  -- Which-key: shows pending keybinds in a popup
+  { 'folke/which-key.nvim', event = 'VeryLazy', opts = {} },
+
+  -- Fuzzy finder. No telescope-fzf-native here (that one needs `make`); the
+  -- built-in Lua sorter is plenty fast for a single box, and live_grep still
+  -- shells out to the ripgrep installed by bootstrap-lite.sh.
+  {
+    'nvim-telescope/telescope.nvim',
+    branch = '0.1.x',
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    config = function()
+      local t = require('telescope')
+      t.setup({})
+      local b = require('telescope.builtin')
+      map('n', '<leader>ff', b.find_files, { desc = '[F]ind [F]iles' })
+      map('n', '<leader>fg', b.live_grep, { desc = '[F]ind by [G]rep' })
+      map('n', '<leader>fb', b.buffers, { desc = '[F]ind [B]uffers' })
+      map('n', '<leader>fh', b.help_tags, { desc = '[F]ind [H]elp' })
+      map('n', '<leader>fr', b.oldfiles, { desc = '[F]ind [R]ecent' })
+    end,
+  },
+}, {
+  ui = { border = 'rounded' },
+  checker = { enabled = false },
+})
