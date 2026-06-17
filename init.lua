@@ -255,7 +255,8 @@ require('lazy').setup({
   -- Fuzzy finder (uses fzf + ripgrep installed by bootstrap.sh)
   {
     'nvim-telescope/telescope.nvim',
-    branch = '0.1.x',
+    branch = 'master', -- 0.1.x calls make_position_params() without an encoding,
+                       -- which warns on Nvim 0.11+; master fixes it (needs 0.11+).
     dependencies = {
       'nvim-lua/plenary.nvim',
       { 'nvim-telescope/telescope-fzf-native.nvim', build = 'make' },
@@ -266,7 +267,8 @@ require('lazy').setup({
       pcall(t.load_extension, 'fzf')
       local b = require('telescope.builtin')
       map('n', '<leader>ff', b.find_files, { desc = '[F]ind [F]iles' })
-      map('n', '<leader>fg', b.live_grep, { desc = '[F]ind by [G]rep' })
+      map('n', '<leader>fg', b.live_grep, { desc = '[F]ind by [G]rep (whole repo)' })
+      map('n', '<leader>fw', b.grep_string, { desc = '[F]ind [W]ord under cursor (whole repo)' })
       map('n', '<leader>fb', b.buffers, { desc = '[F]ind [B]uffers' })
       map('n', '<leader>fh', b.help_tags, { desc = '[F]ind [H]elp' })
       map('n', '<leader>fr', b.oldfiles, { desc = '[F]ind [R]ecent' })
