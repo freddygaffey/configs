@@ -91,6 +91,27 @@ else
   git clone "$REPO_URL" "$DOTFILES"
 fi
 
+# ── 2b. Ghostty terminfo ───────────────────────────────────────────────
+# Ghostty advertises TERM=xterm-ghostty, but most boxes have never heard of it,
+# so clear/tmux/nvim break over SSH with "unknown terminal type". Compile the
+# bundled entry into the local terminfo db (idempotent; skips if already known).
+install_ghostty_terminfo() {
+  if infocmp xterm-ghostty >/dev/null 2>&1; then
+    info "Ghostty terminfo already installed"
+    return 0
+  fi
+  if ! command -v tic >/dev/null 2>&1; then
+    warn "tic not found (ncurses) — skipping Ghostty terminfo install"
+    return 0
+  fi
+  if [ -f "$DOTFILES/ghostty.terminfo" ]; then
+    info "Installing Ghostty terminfo…"
+    tic -x "$DOTFILES/ghostty.terminfo" 2>/dev/null && info "xterm-ghostty terminfo installed" \
+      || warn "Could not compile Ghostty terminfo (set TERM=xterm-256color as a fallback)."
+  fi
+}
+install_ghostty_terminfo
+
 # ── 3. Symlink configs (backing up anything in the way) ────────────────
 link() {  # link <target> <linkname>
   local target="$1" link="$2"
