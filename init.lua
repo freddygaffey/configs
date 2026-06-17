@@ -69,6 +69,20 @@ map('n', '<S-h>', '<cmd>bprevious<CR>', { desc = 'Previous buffer' })
 map('n', '<S-l>', '<cmd>bnext<CR>', { desc = 'Next buffer' })
 map('n', '<leader>bd', '<cmd>bdelete<CR>', { desc = '[B]uffer [D]elete' })
 
+-- File explorer (nvim-tree, configured below): toggle the sidebar / reveal file.
+map('n', '<leader>e', '<cmd>NvimTreeToggle<CR>', { desc = 'File [E]xplorer' })
+map('n', '<leader>ef', '<cmd>NvimTreeFindFile<CR>', { desc = '[E]xplorer: [F]ind current file' })
+
+-- Save / quit
+map('n', '<leader>w', '<cmd>write<CR>', { desc = '[W]rite (save) file' })
+map('n', '<leader>q', '<cmd>quit<CR>', { desc = '[Q]uit window' })
+map('n', '<C-s>', '<cmd>write<CR>', { desc = 'Save file' })
+
+-- Real nvim tab pages (separate from buffers/tmux windows).
+-- Cycle them with the built-in gt / gT.
+map('n', '<leader>tn', '<cmd>tabnew<CR>', { desc = '[T]ab [N]ew' })
+map('n', '<leader>tc', '<cmd>tabclose<CR>', { desc = '[T]ab [C]lose' })
+
 -- ────────────────────────── Bootstrap lazy.nvim ──────────────────────
 local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
@@ -111,6 +125,23 @@ require('lazy').setup({
     dependencies = { 'nvim-tree/nvim-web-devicons' },
     event = 'VeryLazy',
     opts = { options = { diagnostics = 'nvim_lsp', show_buffer_close_icons = false } },
+  },
+
+  -- File explorer sidebar (pure Lua, no build step).
+  -- Toggle with <leader>e; reveal the current file with <leader>ef.
+  {
+    'nvim-tree/nvim-tree.lua',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    config = function()
+      -- nvim-tree wants netrw disabled (do it before it loads).
+      vim.g.loaded_netrw = 1
+      vim.g.loaded_netrwPlugin = 1
+      require('nvim-tree').setup({
+        view = { width = 30 },
+        renderer = { group_empty = true },
+        filters = { dotfiles = false },
+      })
+    end,
   },
 
   -- Git change signs in the gutter
