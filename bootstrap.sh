@@ -37,8 +37,10 @@ install_pkgs() {
     info "Installing packages via brew…"
     brew install $PKGS neovim
   elif command -v apt-get >/dev/null 2>&1; then
-    info "Installing packages via apt…"
+    info "Updating package lists & upgrading via apt…"
     $SUDO apt-get update -y
+    $SUDO DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+    info "Installing packages via apt…"
     $SUDO apt-get install -y $PKGS build-essential ca-certificates
     install_neovim_linux
   elif command -v dnf >/dev/null 2>&1; then
