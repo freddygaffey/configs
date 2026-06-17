@@ -5,10 +5,17 @@ theme, one-command setup. Works on macOS and Linux servers.
 
 ## Setup on a new machine
 
-One command does everything (installs deps, clones this repo, symlinks, sets up
-plugins):
+One command does everything (installs deps + a current Neovim, clones this repo,
+symlinks, sets up plugins). Works as root or with sudo:
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap.sh | bash
+```
+
+On a bare Debian/Ubuntu box that has neither `curl` nor `git` yet:
+
+```sh
+apt-get update && apt-get install -y curl    # (prefix with sudo if not root)
 curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap.sh | bash
 ```
 

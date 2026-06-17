@@ -18,8 +18,15 @@ GIT_EMAIL="${GIT_EMAIL:-fredgaffey08@gmail.com}"
 info() { printf '\033[0;34m::\033[0m %s\n' "$1"; }
 warn() { printf '\033[0;33m!!\033[0m %s\n' "$1"; }
 
+# Use sudo only if we're not already root and sudo exists (blank servers run as root).
+if [ "$(id -u)" -eq 0 ]; then SUDO=""; elif command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else
+  warn "Not root and no sudo — package installs may fail."; SUDO=""
+fi
+
 # ── 1. Install packages ────────────────────────────────────────────────
-PKGS="git tmux neovim fzf ripgrep"
+# Neovim is installed separately (below) from the official release on Linux,
+# because distro packages are usually too old for this config.
+PKGS="git tmux fzf ripgrep curl"
 install_pkgs() {
   if [ "$(uname)" = "Darwin" ]; then
     if ! command -v brew >/dev/null 2>&1; then
@@ -28,20 +35,44 @@ install_pkgs() {
       eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"
     fi
     info "Installing packages via brew…"
-    brew install $PKGS
+    brew install $PKGS neovim
   elif command -v apt-get >/dev/null 2>&1; then
     info "Installing packages via apt…"
-    sudo apt-get update -y
-    sudo apt-get install -y $PKGS build-essential curl
+    $SUDO apt-get update -y
+    $SUDO apt-get install -y $PKGS build-essential ca-certificates
+    install_neovim_linux
   elif command -v dnf >/dev/null 2>&1; then
     info "Installing packages via dnf…"
-    sudo dnf install -y $PKGS gcc make curl
+    $SUDO dnf install -y $PKGS gcc make tar
+    install_neovim_linux
   elif command -v pacman >/dev/null 2>&1; then
     info "Installing packages via pacman…"
-    sudo pacman -Sy --noconfirm $PKGS base-devel curl
+    $SUDO pacman -Sy --noconfirm $PKGS base-devel neovim
   else
-    warn "Unknown package manager — install these yourself: $PKGS"
+    warn "Unknown package manager — install these yourself: $PKGS neovim"
   fi
+}
+
+# Install the latest stable Neovim from the official GitHub tarball into /opt.
+install_neovim_linux() {
+  local arch tmp tarball dir
+  case "$(uname -m)" in
+    x86_64|amd64)  arch="x86_64" ;;
+    aarch64|arm64) arch="arm64" ;;
+    *) warn "Unsupported arch $(uname -m); install neovim manually."; return 0 ;;
+  esac
+  tarball="nvim-linux-${arch}.tar.gz"
+  info "Installing latest Neovim ($arch) from GitHub release…"
+  tmp="$(mktemp -d)"
+  if ! curl -fsSL "https://github.com/neovim/neovim/releases/latest/download/${tarball}" -o "$tmp/$tarball"; then
+    warn "Neovim download failed — check network."; rm -rf "$tmp"; return 1
+  fi
+  $SUDO rm -rf /opt/nvim
+  $SUDO tar -C /opt -xzf "$tmp/$tarball"
+  dir="$(find /opt -maxdepth 1 -name 'nvim-linux*' -type d | head -1)"
+  [ "$dir" != "/opt/nvim" ] && $SUDO mv "$dir" /opt/nvim
+  $SUDO ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
+  rm -rf "$tmp"
 }
 install_pkgs
 
