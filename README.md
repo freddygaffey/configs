@@ -32,8 +32,16 @@ Re-running is safe — existing configs get backed up to `*.bak`.
 | Path             | What                                                   |
 |------------------|--------------------------------------------------------|
 | `bootstrap.sh`   | The installer (macOS/apt/dnf/pacman)                    |
+| `uninstall.sh`   | Reverse it (`--purge` also removes repo + nvim binary) |
 | `init.lua`       | Neovim — kickstart-flavored, lazy.nvim, LSP, telescope |
 | `tmux/tmux.conf` | tmux — vim bindings, carbonfox statusline              |
+
+## Removing it
+
+```sh
+./uninstall.sh           # remove symlinks, restore backups, clear nvim data
+./uninstall.sh --purge   # also delete the cloned repo and the /opt nvim binary
+```
 
 ## How tabs/panes/files are split
 
