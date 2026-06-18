@@ -6,7 +6,7 @@
 #   Local (already cloned):
 #     ./bootstrap.sh
 #
-# Installs: git tmux neovim fzf ripgrep + build tools, clones this repo,
+# Installs: git tmux neovim fzf ripgrep tree-sitter CLI + build tools, clones this repo,
 # symlinks the configs, and sets a basic git identity. Safe to re-run.
 set -euo pipefail
 
@@ -108,7 +108,46 @@ install_neovim_linux() {
   $SUDO ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
   rm -rf "$tmp"
 }
+
+# Install the tree-sitter CLI. nvim-treesitter's `main` branch (which init.lua
+# pins because the old `master` branch crashes on Neovim 0.12) compiles parsers
+# with the `tree-sitter` binary rather than calling cc directly — without it,
+# `:TSUpdate`/parser install fails and there's no syntax highlighting. Homebrew's
+# `tree-sitter` formula ships only the library, so grab the prebuilt single
+# binary from GitHub releases (no node/cargo needed; works on tiny boxes too).
+install_tree_sitter_cli() {
+  if command -v tree-sitter >/dev/null 2>&1; then
+    info "tree-sitter CLI already installed"; return 0
+  fi
+  local os cpu tmp
+  case "$(uname)" in
+    Darwin) os="macos" ;;
+    Linux)  os="linux" ;;
+    *) warn "tree-sitter CLI: unsupported OS $(uname); install it yourself."; return 0 ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64)  cpu="x64" ;;
+    aarch64|arm64) cpu="arm64" ;;
+    *) warn "tree-sitter CLI: unsupported arch $(uname -m); install it yourself."; return 0 ;;
+  esac
+  info "Installing tree-sitter CLI ($os-$cpu) from GitHub release…"
+  tmp="$(mktemp -d)"
+  if ! curl -fsSL "https://github.com/tree-sitter/tree-sitter/releases/latest/download/tree-sitter-${os}-${cpu}.gz" -o "$tmp/ts.gz"; then
+    warn "tree-sitter CLI download failed — treesitter parsers won't compile."; rm -rf "$tmp"; return 1
+  fi
+  gunzip -f "$tmp/ts.gz" && chmod +x "$tmp/ts"
+  if [ -w /usr/local/bin ] 2>/dev/null; then
+    mv "$tmp/ts" /usr/local/bin/tree-sitter
+  else
+    $SUDO mv "$tmp/ts" /usr/local/bin/tree-sitter
+  fi
+  rm -rf "$tmp"
+  command -v tree-sitter >/dev/null 2>&1 && info "tree-sitter CLI installed" \
+    || warn "tree-sitter CLI not on PATH — ensure /usr/local/bin is in PATH."
+}
+
 install_pkgs
+install_tree_sitter_cli
 
 # ── 2. Get the repo ────────────────────────────────────────────────────
 # If we're already running from inside a clone, use it; otherwise clone.

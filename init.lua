@@ -231,6 +231,15 @@ require('lazy').setup({
   -- Auto-close brackets/quotes
   { 'windwp/nvim-autopairs', event = 'InsertEnter', opts = {} },
 
+  -- Auto-close & rename HTML/JSX tags using treesitter — typing <div> inserts
+  -- the matching </div>, and renaming one tag updates its pair.
+  {
+    'windwp/nvim-ts-autotag',
+    ft = { 'html', 'xml', 'javascript', 'typescript', 'javascriptreact',
+           'typescriptreact', 'tsx', 'jsx', 'vue', 'markdown' },
+    opts = {},
+  },
+
   -- Which-key: shows pending keybinds in a popup
   { 'folke/which-key.nvim', event = 'VeryLazy', opts = {} },
 
@@ -280,27 +289,40 @@ require('lazy').setup({
     end,
   },
 
-  -- Treesitter: better syntax highlighting & indentation
+  -- Treesitter: better syntax highlighting & folding.
+  -- Pinned to the `main` branch: the old `master` branch (with the .configs
+  -- module + `highlight = { enable = true }`) does NOT support Neovim 0.12 and
+  -- crashes on parse with "attempt to call method 'range' (a nil value)".
+  -- On `main`, nvim-treesitter is just a parser installer + queries; Neovim's
+  -- built-in `vim.treesitter.start()` does the highlighting and
+  -- `vim.treesitter.foldexpr()` (set in the options block) does the folding.
   {
     'nvim-treesitter/nvim-treesitter',
-    branch = 'master', -- stable API; the default 'main' branch dropped .configs
+    branch = 'main',
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs',
-    opts = {
-      ensure_installed = {
+    config = function()
+      local ts = require('nvim-treesitter')
+      ts.setup()
+
+      local langs = {
         'bash', 'c', 'cpp', 'lua', 'markdown', 'markdown_inline', 'vim', 'vimdoc',
         'python', 'json', 'yaml', 'typescript', 'javascript', 'tsx', 'vue', 'html', 'css',
-      },
-      auto_install = true,
-      highlight = { enable = true },
-      -- Treesitter's indent module is experimental and breaks on the
-      -- half-typed (syntactically incomplete) code you have while editing —
-      -- which is why JS/TS lines didn't indent on <Enter>. Disable it for the
-      -- JS/TS family so Neovim's robust built-in indenter (GetTypescriptIndent
-      -- / GetJavascriptIndent) drives indentation instead, giving the
-      -- press-Enter-and-it-indents behaviour you get in Python.
-      indent = { enable = true, disable = { 'typescript', 'tsx', 'javascript' } },
-    },
+      }
+      ts.install(langs) -- async; first launch downloads/compiles a parser per lang
+
+      -- Start built-in treesitter highlighting for any buffer whose language we
+      -- installed. Indentation is intentionally left to Neovim's built-in
+      -- indenters (the `main` branch dropped the indent module, and the old
+      -- treesitter indenter broke on half-typed JS/TS anyway).
+      local want = {}
+      for _, l in ipairs(langs) do want[l] = true end
+      vim.api.nvim_create_autocmd('FileType', {
+        callback = function(args)
+          local lang = vim.treesitter.language.get_lang(args.match) or args.match
+          if want[lang] then pcall(vim.treesitter.start, args.buf, lang) end
+        end,
+      })
+    end,
   },
 
   -- LSP: language servers managed by mason, configured by lspconfig
@@ -312,6 +334,15 @@ require('lazy').setup({
       'WhoIsSethDaniel/mason-tool-installer.nvim',
     },
     config = function()
+      -- Neovim 0.11 ships default LSP maps under the `gr` prefix (grr/grn/gra/
+      -- gri/grt). They make our plain `gr` mapping wait `timeoutlen` to
+      -- disambiguate, so delete them — we drive references/rename/etc. through
+      -- the maps below instead.
+      for _, key in ipairs({ 'grr', 'grn', 'gri', 'grt' }) do
+        pcall(vim.keymap.del, 'n', key)
+      end
+      pcall(vim.keymap.del, { 'n', 'x' }, 'gra')
+
       vim.api.nvim_create_autocmd('LspAttach', {
         callback = function(ev)
           local bufmap = function(keys, fn, desc)
@@ -331,6 +362,9 @@ require('lazy').setup({
           'clangd',    -- C and C++
           'ts_ls',     -- TypeScript / JavaScript
           'vue_ls',    -- Vue (SFCs)
+          'html',      -- HTML (completion, hover, diagnostics)
+          'cssls',     -- CSS / SCSS / Less
+          'emmet_ls',  -- Emmet abbreviation expansion (ul>li*3 → markup)
           'marksman',  -- Markdown
         },
       })
