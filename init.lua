@@ -126,6 +126,13 @@ map('n', '<leader>sx', '<cmd>close<CR>', { desc = '[S]plit close' })
 map('v', 'J', ":m '>+1<CR>gv=gv", { desc = 'Move selection down' })
 map('v', 'K', ":m '<-2<CR>gv=gv", { desc = 'Move selection up' })
 
+-- dd on a blank/whitespace-only line goes to the black-hole register, so
+-- deleting empty lines doesn't clobber whatever you last yanked. A dd on a
+-- line with content still cuts to the normal register as usual.
+map('n', 'dd', function()
+  return vim.api.nvim_get_current_line():match('^%s*$') and '"_dd' or 'dd'
+end, { expr = true, desc = 'Delete line (blank → black hole)' })
+
 -- Buffers act as nvim's "tabs" (tmux windows are the real tabs).
 -- H / L cycle buffers; <leader>bd closes the current one.
 map('n', '<S-h>', '<cmd>bprevious<CR>', { desc = 'Previous buffer' })
@@ -243,6 +250,24 @@ require('lazy').setup({
   -- Which-key: shows pending keybinds in a popup
   { 'folke/which-key.nvim', event = 'VeryLazy', opts = {} },
 
+  -- Inline images. Opening an image file (png/jpg/gif/webp/svg/…) renders it in
+  -- the buffer, and images referenced from markdown render inline. snacks talks
+  -- the Kitty graphics protocol directly (Ghostty supports it) and wraps the
+  -- escape sequences for tmux's passthrough itself, so it Just Works in a pane.
+  -- Needs the ImageMagick `magick` binary (installed by bootstrap.sh) to convert
+  -- non-PNG formats — that's why this lives in the full config only, not lite.
+  --   <leader>im  toggle showing the image(s) in the current buffer
+  {
+    'folke/snacks.nvim',
+    lazy = false,
+    opts = {
+      image = { enabled = true, doc = { enabled = true, inline = true } },
+    },
+    keys = {
+      { '<leader>im', function() require('snacks').image.toggle() end, desc = '[I]mage: toggle inline render' },
+    },
+  },
+
   -- Surround: add/change/delete surrounding pairs — ysiw), cs"', ds(
   { 'kylechui/nvim-surround', version = '*', event = 'VeryLazy', opts = {} },
 
@@ -281,12 +306,37 @@ require('lazy').setup({
       map('n', '<leader>fb', b.buffers, { desc = '[F]ind [B]uffers' })
       map('n', '<leader>fh', b.help_tags, { desc = '[F]ind [H]elp' })
       map('n', '<leader>fr', b.oldfiles, { desc = '[F]ind [R]ecent' })
+      -- Searchable "menu" of everything nvim can do: every :command and every
+      -- mapped key, fuzzy-filtered. <CR> runs the command / feeds the keys.
+      map('n', '<leader>fc', b.commands, { desc = '[F]ind [C]ommand (menu)' })
+      map('n', '<leader>fk', b.keymaps, { desc = '[F]ind [K]eymap (menu)' })
       -- Theme picker: scroll the list to preview each colorscheme live,
       -- <CR> applies it for this session. Make it permanent by setting the
       -- `theme` variable near the top of this file.
       map('n', '<leader>th', function() b.colorscheme({ enable_preview = true }) end,
         { desc = '[T]heme picker (live preview)' })
     end,
+  },
+
+  -- GUI-like find & replace across the whole project. Opens a split where the
+  -- search, replace, and file-filter are fields at the top and the live ripgrep
+  -- results fill the buffer below — edit the replace field and apply to rewrite
+  -- every match at once (with a diff preview). Pure Lua; shells out to the
+  -- ripgrep installed by bootstrap.sh.
+  --   <leader>sr  open, search prefilled with the word under the cursor
+  --   <leader>sr  (visual) operate only within the selected range
+  --   inside the buffer: <localleader> shows the action keys; default keymaps
+  --   are documented at :help grug-far-actions.
+  {
+    'MagicDuck/grug-far.nvim',
+    cmd = 'GrugFar',
+    keys = {
+      { '<leader>sr', function() require('grug-far').open({ prefills = { search = vim.fn.expand('<cword>') } }) end,
+        mode = 'n', desc = '[S]earch and [R]eplace (project-wide)' },
+      { '<leader>sr', function() require('grug-far').open({ visualSelectionUsage = 'operate-within-range' }) end,
+        mode = 'v', desc = '[S]earch and [R]eplace (within selection)' },
+    },
+    opts = {},
   },
 
   -- Treesitter: better syntax highlighting & folding.
@@ -348,8 +398,19 @@ require('lazy').setup({
           local bufmap = function(keys, fn, desc)
             map('n', keys, fn, { buffer = ev.buf, desc = 'LSP: ' .. desc })
           end
-          bufmap('gd', require('telescope.builtin').lsp_definitions, 'Goto definition')
-          bufmap('gr', require('telescope.builtin').lsp_references, 'Goto references')
+          -- Open references/definitions in a wide telescope picker with the
+          -- preview pane pinned to the right — a side panel showing the actual
+          -- code at each usage, the same horizontal layout as <leader>fg.
+          local function lsp_pick(builtin)
+            return function()
+              require('telescope.builtin')[builtin]({
+                layout_strategy = 'horizontal',
+                layout_config = { width = 0.9, height = 0.85, preview_width = 0.6, preview_cutoff = 0 },
+              })
+            end
+          end
+          bufmap('gd', lsp_pick('lsp_definitions'), 'Goto definition')
+          bufmap('gr', lsp_pick('lsp_references'), 'Goto references')
           bufmap('K', vim.lsp.buf.hover, 'Hover docs')
           bufmap('<leader>rn', vim.lsp.buf.rename, 'Rename')
           bufmap('<leader>ca', vim.lsp.buf.code_action, 'Code action')
