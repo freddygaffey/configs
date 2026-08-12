@@ -41,6 +41,9 @@ for d in "$HOME/.local/share/nvim" "$HOME/.local/state/nvim" "$HOME/.cache/nvim"
   [ -e "$d" ] && { rm -rf "$d"; info "removed $d"; }
 done
 
+# tmux plugins (TPM + resurrect/continuum) — re-cloned on next bootstrap.
+[ -d "$HOME/.tmux/plugins" ] && { rm -rf "$HOME/.tmux/plugins"; info "removed tmux plugins"; }
+
 if [ "$PURGE" -eq 1 ]; then
   if [ -d "$DOTFILES" ]; then
     rm -rf "$DOTFILES"; info "removed repo $DOTFILES"

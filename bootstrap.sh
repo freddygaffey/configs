@@ -30,6 +30,23 @@ export MAKEFLAGS="-j1"
 # A 512 MB droplet with no swap OOM-kills processes (often sshd) the moment
 # anything heavy runs — that's what keeps dropping your SSH session. A little
 # swap turns "killed" into "merely slow", so compiles and upgrades survive.
+# We never create it silently, though: prompt for confirmation first. Under
+# `curl | bash` stdin is the script, so ask on /dev/tty; with no terminal at
+# all (truly unattended), skip unless CREATE_SWAP is set to opt back in.
+confirm_swap() {
+  case "${CREATE_SWAP:-}" in
+    y|Y|yes|YES|1|true) return 0 ;;
+    n|N|no|NO|0|false)  return 1 ;;
+  esac
+  if [ ! -e /dev/tty ]; then
+    warn "No terminal to prompt on — skipping swap (set CREATE_SWAP=1 to force)."
+    return 1
+  fi
+  local ans
+  printf '\033[0;33m??\033[0m No swap found. Create a 2G /swapfile? Low-memory boxes OOM without it. [y/N] ' > /dev/tty
+  read -r ans < /dev/tty || return 1
+  case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
 ensure_swap() {
   [ "$(uname)" = "Darwin" ] && return 0
   if command -v swapon >/dev/null 2>&1 && [ -n "$(swapon --show=NAME --noheadings 2>/dev/null)" ]; then
@@ -38,7 +55,10 @@ ensure_swap() {
   if [ "$(id -u)" -ne 0 ] && [ -z "$SUDO" ]; then
     warn "No swap and no root — can't add it; compiles may OOM."; return 0
   fi
-  info "No swap found — creating 2G /swapfile…"
+  if ! confirm_swap; then
+    info "Skipping swapfile creation."; return 0
+  fi
+  info "Creating 2G /swapfile…"
   if $SUDO fallocate -l 2G /swapfile 2>/dev/null \
      || $SUDO dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none 2>/dev/null; then
     $SUDO chmod 600 /swapfile
@@ -55,7 +75,12 @@ ensure_swap
 # ── 1. Install packages ────────────────────────────────────────────────
 # Neovim is installed separately (below) from the official release on Linux,
 # because distro packages are usually too old for this config.
-PKGS="git tmux fzf ripgrep curl"
+# chafa renders images in the terminal (the tmux prefix+i popup, and as a plain
+# CLI viewer); on Ghostty it uses the Kitty graphics protocol for full-res
+# output. imagemagick backs Neovim's snacks.nvim inline image support (added
+# below, full config only) — its package name is capitalised on dnf, so it's
+# appended per-manager rather than in this shared list.
+PKGS="git tmux fzf ripgrep curl chafa"
 install_pkgs() {
   if [ "$(uname)" = "Darwin" ]; then
     if ! command -v brew >/dev/null 2>&1; then
@@ -64,7 +89,7 @@ install_pkgs() {
       eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"
     fi
     info "Installing packages via brew…"
-    brew install $PKGS neovim
+    brew install $PKGS neovim imagemagick
   elif command -v apt-get >/dev/null 2>&1; then
     # No `apt-get upgrade` here on purpose: a full upgrade can pull a new
     # openssh-server, and dpkg then prompts about the cloud-init-modified
@@ -73,15 +98,15 @@ install_pkgs() {
     # Run `sudo apt-get update && sudo apt-get upgrade` yourself if you want it.
     info "Installing packages via apt…"
     $SUDO apt-get update -y
-    $SUDO apt-get install -y $PKGS build-essential ca-certificates
+    $SUDO apt-get install -y $PKGS build-essential ca-certificates imagemagick
     install_neovim_linux
   elif command -v dnf >/dev/null 2>&1; then
     info "Installing packages via dnf…"
-    $SUDO dnf install -y $PKGS gcc make tar
+    $SUDO dnf install -y $PKGS gcc make tar ImageMagick
     install_neovim_linux
   elif command -v pacman >/dev/null 2>&1; then
     info "Installing packages via pacman…"
-    $SUDO pacman -Sy --noconfirm $PKGS base-devel neovim
+    $SUDO pacman -Sy --noconfirm $PKGS base-devel neovim imagemagick
   else
     warn "Unknown package manager — install these yourself: $PKGS neovim"
   fi
@@ -198,6 +223,31 @@ link() {  # link <target> <linkname>
 }
 link "$DOTFILES"                 "$HOME/.config/nvim"
 link "$DOTFILES/tmux/tmux.conf"  "$HOME/.config/tmux/tmux.conf"
+
+# ── 3b. tmux plugins via TPM (resurrect/continuum) ─────────────────────
+# Clone TPM, then install the plugins declared in tmux.conf headlessly so a
+# fresh box has session save/restore working without a manual `prefix + I`.
+# Everything here is guarded so it can never break the unattended curl|bash run.
+if command -v tmux >/dev/null 2>&1; then
+  TPM_DIR="$HOME/.tmux/plugins/tpm"
+  if [ ! -d "$TPM_DIR" ]; then
+    info "Cloning TPM (tmux plugin manager)…"
+    git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR" 2>/dev/null \
+      || warn "Could not clone TPM; run 'prefix + I' inside tmux to finish."
+  fi
+  if [ -x "$TPM_DIR/bin/install_plugins" ]; then
+    info "Installing tmux plugins…"
+    # Drive the install on a private socket so a running tmux is untouched.
+    # TPM reads the @plugin list from the config file, but needs the install
+    # path in the server env and runs `tmux` against the *current* server — so
+    # set TMUX_PLUGIN_MANAGER_PATH and invoke it via run-shell on that socket.
+    tmux -L tpm_bootstrap -f "$HOME/.config/tmux/tmux.conf" new-session -d 2>/dev/null || true
+    tmux -L tpm_bootstrap set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/" 2>/dev/null || true
+    tmux -L tpm_bootstrap run-shell "$TPM_DIR/bin/install_plugins" 2>/dev/null \
+      || warn "tmux plugin install hit a snag; 'prefix + I' will finish it."
+    tmux -L tpm_bootstrap kill-server 2>/dev/null || true
+  fi
+fi
 
 # ── 4. Basic git identity (only if unset) ──────────────────────────────
 [ -z "$(git config --global user.name  || true)" ] && git config --global user.name  "$GIT_NAME"

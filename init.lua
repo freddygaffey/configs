@@ -23,13 +23,6 @@ local function hl(name, attr)
   local ok, c = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
   if ok and c and c[attr] then return string.format('#%06x', c[attr]) end
 end
-local function darken(hex, factor)
-  if not hex then return nil end
-  local r = math.floor(tonumber(hex:sub(2, 3), 16) * factor)
-  local g = math.floor(tonumber(hex:sub(4, 5), 16) * factor)
-  local b = math.floor(tonumber(hex:sub(6, 7), 16) * factor)
-  return string.format('#%02x%02x%02x', r, g, b)
-end
 local function sync_tmux_theme()
   if not vim.env.TMUX then return end
   local bg      = hl('Normal', 'bg')           or '#161616'
@@ -39,19 +32,26 @@ local function sync_tmux_theme()
   local red     = hl('DiagnosticError', 'fg')  or '#ee5396'
   local dim     = hl('Comment', 'fg')          or '#6b6b6b'
   local panel   = hl('CursorLine', 'bg')       or '#2a2a2a'
-  local bgdim   = darken(bg, 0.6)              or '#0d0d0d'
+  -- tmux-continuum arms its auto-save by prepending a hidden
+  -- #(continuum_save.sh) to status-right at tmux startup. We overwrite
+  -- status-right below, so re-prepend that hook (when the plugin is present)
+  -- or auto-save silently dies the first time nvim themes tmux — sessions
+  -- then never save (see @continuum-restore in tmux.conf). Emits nothing, so
+  -- it stays invisible in the bar.
+  local save_hook = vim.fn.expand('~/.tmux/plugins/tmux-continuum/scripts/continuum_save.sh')
+  local cont = (vim.uv or vim.loop).fs_stat(save_hook) and ('#(%s)'):format(save_hook) or ''
   local opts = {
     { 'status-style',                 ('bg=%s,fg=%s'):format(bg, fg) },
     { 'status-left',                  ('#[bg=%s,fg=%s,bold] #S #[bg=%s]'):format(accent, bg, bg) },
-    { 'status-right',                 ('#{?client_prefix,#[fg=%s]PREFIX ,}#[fg=%s]%%a %%d %%b #[fg=%s]%%H:%%M '):format(red, accent2, accent) },
+    { 'status-right',                 (cont .. '#{?client_prefix,#[fg=%s]PREFIX ,}#[fg=%s]%%a %%d %%b #[fg=%s]%%H:%%M '):format(red, accent2, accent) },
     { 'window-status-format',         ('#[fg=%s] #I #W '):format(dim) },
     { 'window-status-current-format', ('#[bg=%s,fg=%s,bold] #I #W '):format(panel, accent) },
     { 'pane-border-style',            ('fg=%s'):format(panel) },
     { 'pane-active-border-style',     ('fg=%s'):format(accent) },
     { 'message-style',                ('bg=%s,fg=%s'):format(panel, fg) },
     { 'mode-style',                   ('bg=%s,fg=%s'):format(accent, bg) },
-    { 'window-style',                 ('fg=%s,bg=%s'):format(dim, bgdim) },
-    { 'window-active-style',          ('fg=%s,bg=%s'):format(fg, bg) },
+    -- No window-style/window-active-style: dimming inactive panes flattens
+    -- full-screen TUIs (nvim, Claude) to a grey wash. Border accent shows focus.
   }
   local args = { 'tmux' }
   for i, o in ipairs(opts) do
@@ -61,6 +61,23 @@ local function sync_tmux_theme()
   vim.fn.system(args)
 end
 vim.api.nvim_create_autocmd('ColorScheme', { callback = sync_tmux_theme })
+
+-- clangd marks code inside a disabled `#if` as an *inactive region* by sending
+-- it as a `comment` semantic token, and Neovim links `@lsp.type.comment` to
+-- Comment — so the whole branch renders flat grey, on top of (and winning
+-- against) treesitter. On a project clangd can't get real compile flags for
+-- (no compile_commands.json), every feature macro reads as 0 and most of the
+-- file goes grey, which looks exactly like "treesitter is broken".
+-- Clearing the C/C++ variants of that token lets treesitter's colours show
+-- through; genuine comments are still highlighted by treesitter itself.
+-- Re-applied on ColorScheme because loading a scheme clears highlight groups.
+local function unlink_lsp_comment()
+  for _, ft in ipairs({ 'c', 'cpp' }) do
+    vim.api.nvim_set_hl(0, '@lsp.type.comment.' .. ft, {})
+  end
+end
+vim.api.nvim_create_autocmd('ColorScheme', { callback = unlink_lsp_comment })
+unlink_lsp_comment()
 
 -- ────────────────────────────── Options ──────────────────────────────
 local o = vim.opt
@@ -126,6 +143,15 @@ map('n', '<leader>sx', '<cmd>close<CR>', { desc = '[S]plit close' })
 map('v', 'J', ":m '>+1<CR>gv=gv", { desc = 'Move selection down' })
 map('v', 'K', ":m '<-2<CR>gv=gv", { desc = 'Move selection up' })
 
+-- Indent the selection in / out and keep it selected, so > > > walks a block
+-- right one shiftwidth at a time instead of dropping back to normal mode after
+-- the first press. A count still multiplies: 3> shifts three levels at once.
+-- Tab / Shift-Tab do the same thing for muscle memory from other editors.
+map('v', '>', '>gv', { desc = 'Indent selection right' })
+map('v', '<', '<gv', { desc = 'Indent selection left' })
+map('v', '<Tab>', '>gv', { desc = 'Indent selection right' })
+map('v', '<S-Tab>', '<gv', { desc = 'Indent selection left' })
+
 -- dd on a blank/whitespace-only line goes to the black-hole register, so
 -- deleting empty lines doesn't clobber whatever you last yanked. A dd on a
 -- line with content still cuts to the normal register as usual.
@@ -137,7 +163,10 @@ end, { expr = true, desc = 'Delete line (blank → black hole)' })
 -- H / L cycle buffers; <leader>bd closes the current one.
 map('n', '<S-h>', '<cmd>bprevious<CR>', { desc = 'Previous buffer' })
 map('n', '<S-l>', '<cmd>bnext<CR>', { desc = 'Next buffer' })
-map('n', '<leader>bd', '<cmd>bdelete<CR>', { desc = '[B]uffer [D]elete' })
+-- Close the current file but keep the window + nvim-tree sidebar: switch to the
+-- previous buffer, then delete the one we just left (#). Plain :bdelete closes
+-- the edit window, leaving the tree alone to balloon and fill the screen.
+map('n', '<leader>bd', '<cmd>bprevious<bar>bdelete #<CR>', { desc = '[B]uffer [D]elete (keep layout)' })
 
 -- File explorer (nvim-tree, configured below): toggle the sidebar / reveal file.
 map('n', '<leader>e', '<cmd>NvimTreeToggle<CR>', { desc = 'File [E]xplorer' })
@@ -145,7 +174,18 @@ map('n', '<leader>ef', '<cmd>NvimTreeFindFile<CR>', { desc = '[E]xplorer: [F]ind
 
 -- Save / quit
 map('n', '<leader>w', '<cmd>write<CR>', { desc = '[W]rite (save) file' })
-map('n', '<leader>q', '<cmd>quit<CR>', { desc = '[Q]uit window' })
+-- Quit the current pane: if other splits are open, close just this one;
+-- otherwise quit nvim entirely (which frees the tmux pane back to the shell).
+-- The nvim-tree sidebar is ignored when deciding if this is the last pane, and
+-- `confirm` pops a Save? [Y]es/[N]o/[C]ancel prompt for any unsaved changes
+-- instead of silently failing with E37.
+map('n', '<leader>q', function()
+  local real = vim.tbl_filter(function(w)
+    local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w))
+    return not name:match('NvimTree_')
+  end, vim.api.nvim_list_wins())
+  vim.cmd(#real > 1 and 'confirm quit' or 'confirm quitall')
+end, { desc = '[Q]uit pane (prompt to save)' })
 map('n', '<C-s>', '<cmd>write<CR>', { desc = 'Save file' })
 
 -- Real nvim tab pages (separate from buffers/tmux windows).
@@ -225,6 +265,26 @@ require('lazy').setup({
         view = { width = 30 },
         renderer = { group_empty = true },
         filters = { dotfiles = false },
+        -- Bigger repos (or slow/tiny boxes) blow past nvim-tree's 400ms default
+        -- git timeout, which makes it disable git integration with a warning.
+        git = { timeout = 5000 },
+      })
+      -- When :q closes the last edit window and only the tree remains, quit
+      -- nvim instead of letting the tree balloon to fill the screen.
+      vim.api.nvim_create_autocmd('QuitPre', {
+        callback = function()
+          local tree_wins = {}
+          local wins = vim.api.nvim_list_wins()
+          for _, w in ipairs(wins) do
+            local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(w))
+            if name:match('NvimTree_') then table.insert(tree_wins, w) end
+          end
+          if #tree_wins == #wins - 1 then
+            for _, w in ipairs(tree_wins) do
+              pcall(vim.api.nvim_win_close, w, true)
+            end
+          end
+        end,
       })
     end,
   },
@@ -265,6 +325,21 @@ require('lazy').setup({
     },
     keys = {
       { '<leader>im', function() require('snacks').image.toggle() end, desc = '[I]mage: toggle inline render' },
+    },
+  },
+
+  -- Pretty markdown rendering, in-buffer: decorates headings, **tables**, code
+  -- blocks, bullet/checkbox lists, block quotes and callouts using the
+  -- markdown/markdown_inline treesitter parsers installed below. Treesitter-only,
+  -- so this lives in the full config, not lite.
+  --   <leader>rm  toggle the rendered view on/off (off = raw markdown source)
+  {
+    'MeanderingProgrammer/render-markdown.nvim',
+    dependencies = { 'nvim-treesitter/nvim-treesitter', 'nvim-tree/nvim-web-devicons' },
+    ft = { 'markdown' },
+    opts = {},
+    keys = {
+      { '<leader>rm', '<cmd>RenderMarkdown toggle<CR>', desc = '[R]ender [M]arkdown toggle' },
     },
   },
 
@@ -382,8 +457,18 @@ require('lazy').setup({
       { 'williamboman/mason.nvim', opts = {} },
       'williamboman/mason-lspconfig.nvim',
       'WhoIsSethDaniel/mason-tool-installer.nvim',
+      'hrsh7th/cmp-nvim-lsp',   -- so the LSP block can read cmp's capabilities
     },
     config = function()
+      -- Tell every server what nvim-cmp can do (snippet support, extra
+      -- completion/resolve fields). Without this the client advertises only
+      -- Neovim's built-in completion capabilities, and cmp's nvim_lsp source
+      -- comes back empty — the server attaches but nothing ever pops up.
+      -- `vim.lsp.config('*', …)` merges into every server that mason-lspconfig
+      -- (v2) auto-enables, so it must run before that setup call below.
+      vim.lsp.config('*', {
+        capabilities = require('cmp_nvim_lsp').default_capabilities(),
+      })
       -- Neovim 0.11 ships default LSP maps under the `gr` prefix (grr/grn/gra/
       -- gri/grt). They make our plain `gr` mapping wait `timeoutlen` to
       -- disambiguate, so delete them — we drive references/rename/etc. through

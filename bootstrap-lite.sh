@@ -31,6 +31,23 @@ fi
 # ── 0. Ensure swap exists ──────────────────────────────────────────────
 # Even without compiles, a 512 MB box with no swap can OOM-kill sshd under any
 # load and drop your session. A little swap turns "killed" into "merely slow".
+# We never create it silently, though: prompt for confirmation first. Under
+# `curl | bash` stdin is the script, so ask on /dev/tty; with no terminal at
+# all (truly unattended), skip unless CREATE_SWAP is set to opt back in.
+confirm_swap() {
+  case "${CREATE_SWAP:-}" in
+    y|Y|yes|YES|1|true) return 0 ;;
+    n|N|no|NO|0|false)  return 1 ;;
+  esac
+  if [ ! -e /dev/tty ]; then
+    warn "No terminal to prompt on — skipping swap (set CREATE_SWAP=1 to force)."
+    return 1
+  fi
+  local ans
+  printf '\033[0;33m??\033[0m No swap found. Create a 2G /swapfile? Low-memory boxes OOM without it. [y/N] ' > /dev/tty
+  read -r ans < /dev/tty || return 1
+  case "$ans" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
 ensure_swap() {
   [ "$(uname)" = "Darwin" ] && return 0
   if command -v swapon >/dev/null 2>&1 && [ -n "$(swapon --show=NAME --noheadings 2>/dev/null)" ]; then
@@ -39,7 +56,10 @@ ensure_swap() {
   if [ "$(id -u)" -ne 0 ] && [ -z "$SUDO" ]; then
     warn "No swap and no root — can't add it."; return 0
   fi
-  info "No swap found — creating 2G /swapfile…"
+  if ! confirm_swap; then
+    info "Skipping swapfile creation."; return 0
+  fi
+  info "Creating 2G /swapfile…"
   if $SUDO fallocate -l 2G /swapfile 2>/dev/null \
      || $SUDO dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none 2>/dev/null; then
     $SUDO chmod 600 /swapfile
@@ -54,7 +74,11 @@ ensure_swap() {
 ensure_swap
 
 # ── 1. Install packages (no build toolchain) ───────────────────────────
-PKGS="git tmux fzf ripgrep curl"
+# chafa renders images in the terminal (the tmux prefix+i popup, and as a plain
+# CLI viewer) — pure C, no compile here. Full-res on Ghostty via the Kitty
+# graphics protocol, Unicode-block fallback elsewhere. (No imagemagick / nvim
+# inline images on lite, same as treesitter/LSP — see lite/init.lua header.)
+PKGS="git tmux fzf ripgrep curl chafa"
 install_pkgs() {
   if [ "$(uname)" = "Darwin" ]; then
     if ! command -v brew >/dev/null 2>&1; then
@@ -156,6 +180,31 @@ link() {  # link <target> <linkname>
 # Link the lite/ Neovim config (not the repo root) so nvim loads lite/init.lua.
 link "$DOTFILES/lite"            "$HOME/.config/nvim"
 link "$DOTFILES/tmux/tmux.conf"  "$HOME/.config/tmux/tmux.conf"
+
+# ── 3b. tmux plugins via TPM (resurrect/continuum) ─────────────────────
+# resurrect/continuum are pure shell — no compile — so they're safe on tiny
+# boxes. Clone TPM and install headlessly so session save/restore works without
+# a manual `prefix + I`. Guarded so it can never break the unattended run.
+if command -v tmux >/dev/null 2>&1; then
+  TPM_DIR="$HOME/.tmux/plugins/tpm"
+  if [ ! -d "$TPM_DIR" ]; then
+    info "Cloning TPM (tmux plugin manager)…"
+    git clone --depth 1 https://github.com/tmux-plugins/tpm "$TPM_DIR" 2>/dev/null \
+      || warn "Could not clone TPM; run 'prefix + I' inside tmux to finish."
+  fi
+  if [ -x "$TPM_DIR/bin/install_plugins" ]; then
+    info "Installing tmux plugins…"
+    # Drive the install on a private socket so a running tmux is untouched.
+    # TPM reads the @plugin list from the config file, but needs the install
+    # path in the server env and runs `tmux` against the *current* server — so
+    # set TMUX_PLUGIN_MANAGER_PATH and invoke it via run-shell on that socket.
+    tmux -L tpm_bootstrap -f "$HOME/.config/tmux/tmux.conf" new-session -d 2>/dev/null || true
+    tmux -L tpm_bootstrap set-environment -g TMUX_PLUGIN_MANAGER_PATH "$HOME/.tmux/plugins/" 2>/dev/null || true
+    tmux -L tpm_bootstrap run-shell "$TPM_DIR/bin/install_plugins" 2>/dev/null \
+      || warn "tmux plugin install hit a snag; 'prefix + I' will finish it."
+    tmux -L tpm_bootstrap kill-server 2>/dev/null || true
+  fi
+fi
 
 # ── 4. Basic git identity (only if unset) ──────────────────────────────
 [ -z "$(git config --global user.name  || true)" ] && git config --global user.name  "$GIT_NAME"
