@@ -42,7 +42,7 @@ Already have the repo cloned? Run the script directly instead:
 | `init.lua`          | Neovim — kickstart-flavored, lazy.nvim, LSP, telescope |
 | `lite/init.lua`     | Neovim — pure-Lua subset, no treesitter/LSP, no builds |
 | `tmux/tmux.conf`    | tmux — vim bindings, carbonfox statusline              |
-| `shell/prompt.sh`   | zsh/bash prompt — path + git branch, `*` when dirty     |
+| `shell/prompt.sh`   | zsh/bash prompt — user@host, path, git branch           |
 
 ## Removing it
 
@@ -65,23 +65,33 @@ Or from a local checkout:
 
 ## Shell prompt
 
-The prompt shows the git branch of whatever directory you're in, and a `*` when
-tracked files are modified:
+Debian's stock prompt shape — user@host, colon, path — with the git branch of
+whatever directory you're in appended, and a `*` when tracked files are
+modified. Same on every machine, zsh and bash alike:
 
 ```
-~/configs (main) %            clean
-~/configs (main*) %           uncommitted changes
-fred@deb ~/configs (main) $   user@host prefix appears over SSH only
+fred@freds-mac:~/configs (main)%        clean
+fred@freds-mac:~/configs (main*)%       uncommitted changes
+fred@deb:~/.dotfiles/configs (main*)$   a server, over SSH
 ```
 
-Works in zsh and bash; a detached HEAD shows the short commit hash. Both
-bootstrap scripts link `shell/prompt.sh` to `~/.config/shell/prompt.sh` and add
-a source line to `~/.zshrc`/`~/.bashrc`, so it's on after a `curl | bash` — no
-manual step. nvim's statusline shows the same branch (lualine, plus `+`/`~`/`-`
-counts from gitsigns).
+user@host is always shown, not only over SSH: inside tmux a pane often has no
+`SSH_CONNECTION` in its environment, so gating on it hid the host on exactly the
+remote boxes where you want it. A detached HEAD shows the short commit hash. On
+xterm-like terminals the window title is set to `user@host: dir` too, the same
+way Debian's own `~/.bashrc` does it (skipped inside tmux, as Debian skips it).
 
-In a huge repo the dirty check is the slow part; `export GIT_PROMPT_DIRTY=0`
-turns it off and keeps the branch name.
+Both bootstrap scripts link `shell/prompt.sh` to `~/.config/shell/prompt.sh` and
+add a source line to `~/.zshrc`/`~/.bashrc`, so it's on after a `curl | bash` —
+no manual step. nvim's statusline shows the same branch (lualine, plus
+`+`/`~`/`-` counts from gitsigns).
+
+Two toggles, per-shell or set in your rc file above the source line:
+
+```sh
+export GIT_PROMPT_HOST=0    # drop the user@host prefix on this machine
+export GIT_PROMPT_DIRTY=0   # skip the dirty check (the slow part in a huge repo)
+```
 
 ## How tabs/panes/files are split
 
