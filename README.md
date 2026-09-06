@@ -42,6 +42,7 @@ Already have the repo cloned? Run the script directly instead:
 | `init.lua`          | Neovim — kickstart-flavored, lazy.nvim, LSP, telescope |
 | `lite/init.lua`     | Neovim — pure-Lua subset, no treesitter/LSP, no builds |
 | `tmux/tmux.conf`    | tmux — vim bindings, carbonfox statusline              |
+| `shell/prompt.sh`   | zsh/bash prompt — path + git branch, `*` when dirty     |
 
 ## Removing it
 
@@ -61,6 +62,26 @@ Or from a local checkout:
 ./uninstall.sh           # remove symlinks, restore backups, clear nvim data
 ./uninstall.sh --purge   # also delete the cloned repo and the /opt nvim binary
 ```
+
+## Shell prompt
+
+The prompt shows the git branch of whatever directory you're in, and a `*` when
+tracked files are modified:
+
+```
+~/configs (main) %            clean
+~/configs (main*) %           uncommitted changes
+fred@deb ~/configs (main) $   user@host prefix appears over SSH only
+```
+
+Works in zsh and bash; a detached HEAD shows the short commit hash. Both
+bootstrap scripts link `shell/prompt.sh` to `~/.config/shell/prompt.sh` and add
+a source line to `~/.zshrc`/`~/.bashrc`, so it's on after a `curl | bash` — no
+manual step. nvim's statusline shows the same branch (lualine, plus `+`/`~`/`-`
+counts from gitsigns).
+
+In a huge repo the dirty check is the slow part; `export GIT_PROMPT_DIRTY=0`
+turns it off and keeps the branch name.
 
 ## How tabs/panes/files are split
 

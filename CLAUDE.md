@@ -53,6 +53,7 @@ The colorscheme is set once via the `theme` local near the top of each `init.lua
 - Installs Neovim from the official GitHub release tarball into `/opt` on Linux (distro packages are too old); uses brew/pacman packages on macOS/Arch.
 - `link()` backs up any existing non-symlink config to `*.bak` before symlinking — re-running is safe. `uninstall.sh` reverses it (`--purge` also removes the clone and `/opt` nvim).
 - Compiles the bundled `ghostty.terminfo` so SSH sessions from Ghostty don't break with "unknown terminal type".
+- `shell/prompt.sh` (git-aware zsh/bash prompt) is linked to `~/.config/shell/prompt.sh` and enabled by appending a marker-guarded source line to `~/.zshrc`/`~/.bashrc`. That `enable_prompt` block is duplicated verbatim in **both** bootstrap scripts, and `uninstall.sh` strips the same two lines back out by exact text — so if you reword the appended comment or source line, change it in all three places.
 
 ## Plugins
 

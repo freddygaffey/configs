@@ -241,7 +241,33 @@ require('lazy').setup({
   {
     'nvim-lualine/lualine.nvim',
     dependencies = { 'nvim-tree/nvim-web-devicons' },
-    opts = { options = { theme = theme, section_separators = '', component_separators = '|' } },
+    opts = {
+      options = { theme = theme, section_separators = '', component_separators = '|' },
+      -- Git branch + working-tree changes, right next to the mode:
+      --   NORMAL |  main | +3 ~1 -0 | init.lua | 42:7
+      -- 'branch' is in lualine's default lualine_b already, but spell the
+      -- section out so it can't be lost, and feed 'diff' from gitsigns instead
+      -- of lualine's built-in source: gitsigns has already diffed the buffer,
+      -- so reading its counts is free, whereas the fallback shells out to
+      -- `git diff` on every redraw (noticeable on the lite boxes).
+      -- Naming only lualine_b replaces that one section; a/c/x/y/z keep their
+      -- defaults (see apply_configuration in lualine's config.lua).
+      sections = {
+        lualine_b = {
+          'branch',
+          {
+            'diff',
+            source = function()
+              local gs = vim.b.gitsigns_status_dict
+              if gs then
+                return { added = gs.added, modified = gs.changed, removed = gs.removed }
+              end
+            end,
+          },
+          'diagnostics',
+        },
+      },
+    },
   },
 
   -- Bufferline: shows open files (buffers) as tabs along the top.

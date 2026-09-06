@@ -181,6 +181,31 @@ link() {  # link <target> <linkname>
 link "$DOTFILES/lite"            "$HOME/.config/nvim"
 link "$DOTFILES/tmux/tmux.conf"  "$HOME/.config/tmux/tmux.conf"
 
+# ── 3c. Git-aware shell prompt ─────────────────────────────────────────
+# shell/prompt.sh puts the current git branch (and a * when tracked files are
+# modified) in the zsh/bash prompt. Link it, then source it from the rc files —
+# appended once, guarded by the path itself, so re-running is a no-op. It goes
+# at the END of the rc file on purpose: whatever prompt was set earlier there
+# (a distro default, oh-my-zsh) is then overridden by ours.
+link "$DOTFILES/shell/prompt.sh" "$HOME/.config/shell/prompt.sh"
+enable_prompt() {
+  local rc marker='.config/shell/prompt.sh'
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    # Write an rc file only if it exists already or that shell is installed.
+    case "$rc" in
+      *.zshrc)  [ -f "$rc" ] || command -v zsh  >/dev/null 2>&1 || continue ;;
+      *.bashrc) [ -f "$rc" ] || command -v bash >/dev/null 2>&1 || continue ;;
+    esac
+    if [ -f "$rc" ] && grep -qF "$marker" "$rc"; then
+      info "git prompt already sourced in $rc"; continue
+    fi
+    printf '\n# configs: git-aware prompt (branch + dirty marker)\n[ -f "$HOME/%s" ] && . "$HOME/%s"\n' \
+      "$marker" "$marker" >> "$rc"
+    info "enabled git prompt in $rc"
+  done
+}
+enable_prompt
+
 # ── 3b. tmux plugins via TPM (resurrect/continuum) ─────────────────────
 # resurrect/continuum are pure shell — no compile — so they're safe on tiny
 # boxes. Clone TPM and install headlessly so session save/restore works without

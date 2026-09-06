@@ -35,6 +35,21 @@ unlink_restore() {
 
 unlink_restore "$HOME/.config/nvim"
 unlink_restore "$HOME/.config/tmux/tmux.conf"
+unlink_restore "$HOME/.config/shell/prompt.sh"
+
+# Take the git-prompt source line (and its comment) back out of the shell rc
+# files — the bootstrap appended it there. Rewrites the file in place so the
+# rest of your rc, and the file's permissions, are untouched.
+for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+  [ -f "$rc" ] || continue
+  grep -qF '.config/shell/prompt.sh' "$rc" || continue
+  tmp="$(mktemp)"
+  grep -vF -e '# configs: git-aware prompt (branch + dirty marker)' \
+           -e '[ -f "$HOME/.config/shell/prompt.sh" ] && . "$HOME/.config/shell/prompt.sh"' \
+    "$rc" > "$tmp" && cat "$tmp" > "$rc"
+  rm -f "$tmp"
+  info "removed git prompt from $rc"
+done
 
 # Neovim plugin / state / cache data (safe to delete — regenerated on next run)
 for d in "$HOME/.local/share/nvim" "$HOME/.local/state/nvim" "$HOME/.cache/nvim"; do
