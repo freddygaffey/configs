@@ -19,10 +19,13 @@
 # block). Inside tmux, TERM is tmux-256color/screen* — Debian skips the title
 # there and so do we, leaving tmux's own window naming alone.
 #
-# Colours keep Debian's roles (green user@host, blue path) in the carbonfox
-# palette used by nvim and tmux, as 256-colour codes so it survives terminals
-# without truecolor. A detached HEAD shows the short commit hash instead of a
-# branch name.
+# Colours keep Debian's roles: green user@host, blue path. The green is the
+# terminal's own palette green (SGR 32) — the same colour Debian's stock PS1
+# uses — but WITHOUT the `01;` bold Debian prefixes it with, since bold is what
+# renders it as the light/bright variant. Taking it from the palette also means
+# it tracks the terminal theme instead of pinning one shade. Path and branch
+# stay carbonfox 256-colour codes, which survive terminals without truecolor.
+# A detached HEAD shows the short commit hash instead of a branch name.
 #
 # Toggles, both settable per-shell or in your rc file above the source line:
 #   export GIT_PROMPT_HOST=0    drop the user@host prefix on this machine
@@ -70,7 +73,7 @@ if [ -n "${ZSH_VERSION-}" ]; then
     git=$(__git_prompt_info)
     case $git in *\*) star='*'; git=${git%\*} ;; esac
     [ -n "$git" ] && seg=" %F{75}(${git}%F{204}${star}%F{75})%f"
-    [ "${GIT_PROMPT_HOST:-1}" != "0" ] && host='%F{78}%n@%m%f:'
+    [ "${GIT_PROMPT_HOST:-1}" != "0" ] && host='%F{green}%n@%m%f:'
     [ -n "${debian_chroot-}" ] && chroot="(${debian_chroot})"
     PROMPT="${chroot}${host}%F{111}%~%f${seg}%# "
     [ -n "$__prompt_title" ] && print -Pn '\e]0;%n@%m: %~\a'
@@ -83,7 +86,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
     git=$(__git_prompt_info)
     case $git in *\*) star='*'; git=${git%\*} ;; esac
     [ -n "$git" ] && seg=" \[\e[38;5;75m\](${git}\[\e[38;5;204m\]${star}\[\e[38;5;75m\])\[\e[0m\]"
-    [ "${GIT_PROMPT_HOST:-1}" != "0" ] && host='\[\e[38;5;78m\]\u@\h\[\e[0m\]:'
+    [ "${GIT_PROMPT_HOST:-1}" != "0" ] && host='\[\e[32m\]\u@\h\[\e[0m\]:'
     [ -n "$__prompt_title" ] && title='\[\e]0;\u@\h: \w\a\]'
     # debian_chroot stays single-quoted so bash expands it when the prompt is
     # drawn, exactly as the stock Debian PS1 does.
