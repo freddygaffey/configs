@@ -185,24 +185,26 @@ link "$DOTFILES/tmux/tmux.conf"  "$HOME/.config/tmux/tmux.conf"
 # shell/prompt.sh puts the current git branch (and a * when tracked files are
 # modified) in the zsh/bash prompt. Link it, then source it from the rc files —
 # appended once, guarded by the path itself, so re-running is a no-op. It goes
-# at the END of the rc file on purpose: whatever prompt was set earlier there
-# (a distro default, oh-my-zsh) is then overridden by ours.
+# at the END of the rc file on purpose: prompt.sh reads the prompt that is
+# already set and adds the branch to it, so it has to run after the rc file has
+# set one.
 link "$DOTFILES/shell/prompt.sh" "$HOME/.config/shell/prompt.sh"
 enable_prompt() {
-  local rc marker='.config/shell/prompt.sh'
-  for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-    # Write an rc file only if it exists already or that shell is installed.
-    case "$rc" in
-      *.zshrc)  [ -f "$rc" ] || command -v zsh  >/dev/null 2>&1 || continue ;;
-      *.bashrc) [ -f "$rc" ] || command -v bash >/dev/null 2>&1 || continue ;;
-    esac
-    if [ -f "$rc" ] && grep -qF "$marker" "$rc"; then
-      info "git prompt already sourced in $rc"; continue
-    fi
-    printf '\n# configs: git-aware prompt (branch + dirty marker)\n[ -f "$HOME/%s" ] && . "$HOME/%s"\n' \
-      "$marker" "$marker" >> "$rc"
-    info "enabled git prompt in $rc"
-  done
+  local marker='.config/shell/prompt.sh' rc
+  # Only ever touch the rc of your actual login shell — an earlier version wrote
+  # to both ~/.zshrc and ~/.bashrc, which created a ~/.bashrc on a Mac that had
+  # never had one.
+  case "${SHELL##*/}" in
+    zsh)  rc="$HOME/.zshrc" ;;
+    bash) rc="$HOME/.bashrc" ;;
+    *)    warn "Login shell is ${SHELL##*/}; add this to its rc yourself: . ~/$marker"; return 0 ;;
+  esac
+  if [ -f "$rc" ] && grep -qF "$marker" "$rc"; then
+    info "git prompt already sourced in $rc"; return 0
+  fi
+  printf '\n# configs: git branch in the prompt\n[ -f "$HOME/%s" ] && . "$HOME/%s"\n' \
+    "$marker" "$marker" >> "$rc"
+  info "enabled git prompt in $rc"
 }
 enable_prompt
 

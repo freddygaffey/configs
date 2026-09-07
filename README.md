@@ -65,33 +65,29 @@ Or from a local checkout:
 
 ## Shell prompt
 
-Debian's stock prompt shape — user@host, colon, path — with the git branch of
-whatever directory you're in appended, and a `*` when tracked files are
-modified. Same on every machine, zsh and bash alike:
+The current git branch, in the prompt. One function and one line — it does not
+replace a prompt you already have.
+
+On the Mac (zsh) it's the themed version:
 
 ```
-fred@freds-mac:~/configs (main)%        clean
-fred@freds-mac:~/configs (main*)%       uncommitted changes
-fred@deb:~/.dotfiles/configs (main*)$   a server, over SSH
+fred@freds-mac:~/art_move (master)%
 ```
 
-user@host is always shown, not only over SSH: inside tmux a pane often has no
-`SSH_CONNECTION` in its environment, so gating on it hid the host on exactly the
-remote boxes where you want it. A detached HEAD shows the short commit hash. On
-xterm-like terminals the window title is set to `user@host: dir` too, the same
-way Debian's own `~/.bashrc` does it (skipped inside tmux, as Debian skips it).
+On a Debian server (bash) your distro prompt is left exactly as it is, with the
+branch inserted before the `$`:
+
+```
+fred@deb:~/.dotfiles/configs (main)$
+```
+
+A Python venv still shows in both — `activate` prepends `(env) ` to the prompt
+and nothing here disturbs that. Colours are 256-colour codes, so they render the
+same in and out of tmux; the green is `29` (`#00875f`) if you want to change it.
 
 Both bootstrap scripts link `shell/prompt.sh` to `~/.config/shell/prompt.sh` and
-add a source line to `~/.zshrc`/`~/.bashrc`, so it's on after a `curl | bash` —
-no manual step. nvim's statusline shows the same branch (lualine, plus
-`+`/`~`/`-` counts from gitsigns).
-
-Two toggles, per-shell or set in your rc file above the source line:
-
-```sh
-export GIT_PROMPT_HOST=0    # drop the user@host prefix on this machine
-export GIT_PROMPT_DIRTY=0   # skip the dirty check (the slow part in a huge repo)
-```
+add a source line to your login shell's rc file, so it's on after a
+`curl | bash`. nvim's statusline shows the same branch via lualine.
 
 ## How tabs/panes/files are split
 

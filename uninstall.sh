@@ -44,7 +44,8 @@ for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
   [ -f "$rc" ] || continue
   grep -qF '.config/shell/prompt.sh' "$rc" || continue
   tmp="$(mktemp)"
-  grep -vF -e '# configs: git-aware prompt (branch + dirty marker)' \
+  grep -vF -e '# configs: git branch in the prompt' \
+           -e '# configs: git-aware prompt (branch + dirty marker)' \
            -e '[ -f "$HOME/.config/shell/prompt.sh" ] && . "$HOME/.config/shell/prompt.sh"' \
     "$rc" > "$tmp" && cat "$tmp" > "$rc"
   rm -f "$tmp"

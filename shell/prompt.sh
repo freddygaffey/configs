@@ -1,102 +1,32 @@
-# prompt.sh — git-aware shell prompt for zsh and bash.
+# Git branch in the prompt. One function, one line per shell.
 #
-# Symlinked to ~/.config/shell/prompt.sh by bootstrap.sh / bootstrap-lite.sh,
-# which also append a guarded `. ~/.config/shell/prompt.sh` line to ~/.zshrc and
-# ~/.bashrc — so a fresh `curl | bash` box comes up with the prompt already on.
+# zsh (the Mac) — the themed prompt: user@host, path, branch, carbonfox colours.
 #
-# The shape is Debian's stock bash prompt — user@host, colon, path — with the
-# git branch appended, so every machine reads the same:
+#   fred@freds-mac:~/art_move (master)%
 #
-#   fred@freds-mac:~/configs (main)%        clean
-#   fred@deb:~/.dotfiles/configs (main*)$   * = tracked files modified
+# bash (the Debian boxes) — your distro prompt is left exactly as it is. The
+# branch is inserted in front of its trailing "$ " and nothing else is touched:
+# no colours, no title handling, no PROMPT_COMMAND. Debian's own PS1 keeps doing
+# all of that.
 #
-# user@host is shown ALWAYS, not just over SSH: inside tmux a pane often has no
-# SSH_CONNECTION in its environment, so gating on it made the host vanish on
-# exactly the remote boxes where you need to know which machine you're on.
+#   fred@deb:~/.dotfiles/configs (main)$
 #
-# On xterm-like terminals the window/tab title is also set to "user@host: dir",
-# which is what Debian's own ~/.bashrc does (its `case "$TERM" in xterm*|rxvt*)`
-# block). Inside tmux, TERM is tmux-256color/screen* — Debian skips the title
-# there and so do we, leaving tmux's own window naming alone.
+# A Python venv still shows in both: `activate` prepends "(env) " to the prompt
+# at activation time, and neither line here disturbs that.
 #
-# Colours keep Debian's roles: green user@host, blue path. The green is the
-# terminal's own palette green (SGR 32) — the same colour Debian's stock PS1
-# uses — but WITHOUT the `01;` bold Debian prefixes it with, since bold is what
-# renders it as the light/bright variant. Taking it from the palette also means
-# it tracks the terminal theme instead of pinning one shade. Path and branch
-# stay carbonfox 256-colour codes, which survive terminals without truecolor.
-# A detached HEAD shows the short commit hash instead of a branch name.
+# Colours are 256-colour codes, which render the same in and out of tmux. The
+# only one worth fiddling with is 29 (#00875f) — the green. 28 (#008700) and
+# 22 (#005f00) are darker, 71 (#5faf5f) lighter.
 #
-# Toggles, both settable per-shell or in your rc file above the source line:
-#   export GIT_PROMPT_HOST=0    drop the user@host prefix on this machine
-#   export GIT_PROMPT_DIRTY=0   skip the dirty check — the slow part in a huge
-#                               repo — and keep just the branch name
+# Linked to ~/.config/shell/prompt.sh and sourced from ~/.zshrc / ~/.bashrc by
+# bootstrap.sh / bootstrap-lite.sh.
 
-# Interactive shells only — sourcing this from a script must be a no-op.
-case $- in *i*) ;; *) return 0 ;; esac
+case $- in *i*) ;; *) return 0 ;; esac   # interactive shells only
 
-# Prints "branch" (or "branch*" when dirty); prints nothing outside a work tree.
-__git_prompt_info() {
-  command -v git >/dev/null 2>&1 || return 0
-  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
-  local b d=''
-  b=$(git symbolic-ref --short -q HEAD 2>/dev/null) \
-    || b=$(git rev-parse --short HEAD 2>/dev/null) \
-    || return 0                       # brand-new repo, no commits yet
-  # The branch name is interpolated into PS1/PROMPT, which both shells expand
-  # again at draw time — strip anything that could be an expansion or a prompt
-  # escape rather than trusting a branch name from a repo someone else wrote.
-  b=${b//[^A-Za-z0-9._\/+@-]/}
-  if [ "${GIT_PROMPT_DIRTY:-1}" != "0" ]; then
-    # --no-optional-locks: never write .git/index.lock just to draw a prompt
-    # (it races with a real git command running in another pane).
-    # -uno: skip untracked files — that's what keeps this quick on big trees.
-    [ -n "$(git --no-optional-locks status --porcelain -uno 2>/dev/null | head -1)" ] && d='*'
-  fi
-  printf '%s%s' "$b" "$d"
-}
-
-# Same terminal test Debian's ~/.bashrc uses to decide whether to set the title.
-case "$TERM" in
-  xterm*|rxvt*) __prompt_title=1 ;;
-  *)            __prompt_title='' ;;
-esac
+parse_git_branch() { git branch --show-current 2>/dev/null | sed 's/.*/ (&)/'; }
 
 if [ -n "${ZSH_VERSION-}" ]; then
-  # Rebuild PROMPT in precmd rather than using PROMPT_SUBST: prompt escapes
-  # (%F, %~) are only interpreted in PROMPT itself, not in the result of a
-  # substitution, so building the coloured string here keeps zsh's width
-  # tracking correct — which is what stops long lines wrapping wrongly.
-  autoload -Uz add-zsh-hook
-  __prompt_precmd() {
-    local git star='' seg='' host='' chroot=''
-    git=$(__git_prompt_info)
-    case $git in *\*) star='*'; git=${git%\*} ;; esac
-    [ -n "$git" ] && seg=" %F{75}(${git}%F{204}${star}%F{75})%f"
-    [ "${GIT_PROMPT_HOST:-1}" != "0" ] && host='%F{green}%n@%m%f:'
-    [ -n "${debian_chroot-}" ] && chroot="(${debian_chroot})"
-    PROMPT="${chroot}${host}%F{111}%~%f${seg}%# "
-    [ -n "$__prompt_title" ] && print -Pn '\e]0;%n@%m: %~\a'
-  }
-  add-zsh-hook precmd __prompt_precmd
-
-elif [ -n "${BASH_VERSION-}" ]; then
-  __prompt_command() {
-    local git star='' seg='' host='' title=''
-    git=$(__git_prompt_info)
-    case $git in *\*) star='*'; git=${git%\*} ;; esac
-    [ -n "$git" ] && seg=" \[\e[38;5;75m\](${git}\[\e[38;5;204m\]${star}\[\e[38;5;75m\])\[\e[0m\]"
-    [ "${GIT_PROMPT_HOST:-1}" != "0" ] && host='\[\e[32m\]\u@\h\[\e[0m\]:'
-    [ -n "$__prompt_title" ] && title='\[\e]0;\u@\h: \w\a\]'
-    # debian_chroot stays single-quoted so bash expands it when the prompt is
-    # drawn, exactly as the stock Debian PS1 does.
-    PS1="${title}"'${debian_chroot:+($debian_chroot)}'"${host}\[\e[38;5;111m\]\w\[\e[0m\]${seg}\\\$ "
-  }
-  # Keep any PROMPT_COMMAND the distro already set (Debian uses it for the
-  # xterm title); just add ours to it, and only once.
-  case "${PROMPT_COMMAND-}" in
-    *__prompt_command*) ;;
-    '') PROMPT_COMMAND=__prompt_command ;;
-    *)  PROMPT_COMMAND="${PROMPT_COMMAND%;};__prompt_command" ;;
-  esac
+  setopt PROMPT_SUBST; PROMPT='%F{29}%n@%m%f:%F{111}%~%f%F{75}$(parse_git_branch)%f%# '
+else
+  PS1="${PS1%'\$ '}"'$(parse_git_branch)\$ '
 fi
