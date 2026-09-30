@@ -1,6 +1,12 @@
-/* GENERATED — do not edit ~/.config/rofi/theme.rasi by hand.
+/* GENERATED — do not edit ~/.config/rofi/config.rasi by hand.
  * Rendered from templates/rofi-theme.template with a themes/*.env palette by
  * i3/scripts/ui-mode.
+ *
+ * Behaviour and colours are in ONE file on purpose. Splitting them meant a
+ * @theme include, and rofi would not load it from any form tried — "theme",
+ * an absolute path, or @import — while `rofi -dump-theme` prints only a header
+ * so there was no way to confirm what it had read. One file removes the
+ * question.
  *
  * Uses the ui_* roles, the same neutral slate as the i3 bar — so the launcher
  * matches the bar rather than the terminal, and needs no re-render when the
@@ -10,6 +16,21 @@
  * That needs a compositor: picom is started by i3. Without one it simply renders
  * opaque rather than breaking.
  */
+
+configuration {
+    modi:                "drun,run,window";
+    show-icons:          true;
+    icon-theme:          "Yaru";
+    drun-display-format: "{name}";
+    display-drun:        "apps";
+    display-run:         "run";
+    display-window:      "windows";
+    kb-cancel:           "Escape,Super+d";
+    /* Ctrl-n/p alongside the arrows, matching tmux and readline habits. */
+    kb-row-down:         "Down,Control+n";
+    kb-row-up:           "Up,Control+p";
+}
+
 * {
     bg:       @ui_bg@dd;
     bg-alt:   @ui_panel@ee;
