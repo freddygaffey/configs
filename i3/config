@@ -34,7 +34,16 @@ set $right l
 # Terminal is resolved by a wrapper rather than hardcoded: Ghostty on this box,
 # but the same config must work on a machine where it isn't installed yet.
 set $term ~/.config/i3/scripts/terminal
-set $lock i3lock -n -c 161616
+# Lock screen: the current wallpaper, dimmed, with contact details over it.
+# i3lock itself cannot draw text and i3lock-color is not packaged, so the image
+# is composited with ImageMagick and handed over with -i. Falls back to a flat
+# fill if anything goes wrong — a screen that will not lock is a security
+# problem, and a missing wallpaper is not a reason to create one.
+#
+# Contact details live in ~/.config/lockscreen-contact, deliberately NOT in this
+# repo: it is public, and the notice carries a real name and number. See
+# lockscreen-contact.example.
+set $lock ~/.config/i3/scripts/lockscreen
 
 # Upstream default font. Pango, so it handles the bar's glyphs.
 font pango:JetBrainsMono Nerd Font 11

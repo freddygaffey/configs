@@ -1,0 +1,17 @@
+# Copied to ~/.config/lockscreen-contact, which is NOT in this repo.
+#
+# This repo is public, and a lock screen notice carries a real name, a real phone
+# number and possibly an address — exactly the things not to publish. Keep the
+# real file outside git.
+#
+#   cp lockscreen-contact.example ~/.config/lockscreen-contact
+#   $EDITOR ~/.config/lockscreen-contact
+#
+# Lines starting with # are ignored, blank lines dropped. Shown centred at the
+# bottom of the lock screen, over the current wallpaper.
+#
+# Keep it short — it is read at a glance by a stranger holding your laptop.
+
+If found, please contact
+your.name@example.com
++61 400 000 000

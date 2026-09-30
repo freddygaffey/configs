@@ -1,0 +1,117 @@
+#!/usr/bin/env sh
+# Lock the screen showing the current wallpaper and your contact details.
+#
+#   lockscreen            lock now
+#   lockscreen --build    just rebuild the image, do not lock (for testing)
+#
+# Why compose an image at all: i3lock takes a PNG with -i, but it cannot draw
+# text, and i3lock-color (which can) is not packaged on Ubuntu. So the wallpaper,
+# the dimming and the contact block are composited with ImageMagick and i3lock is
+# handed the finished picture.
+#
+# The image must match the screen resolution exactly — i3lock tiles or crops
+# anything else rather than scaling it.
+#
+# CONTACT DETAILS ARE NOT IN THIS REPO. It is public, and a lock screen is a
+# "please return this" notice with a real name and number on it. They live in
+# ~/.config/lockscreen-contact, which is yours alone; see
+# lockscreen-contact.example for the shape. With no such file, the lock screen is
+# just the wallpaper.
+set -eu
+
+BUILD_ONLY=0
+[ "${1:-}" = "--build" ] && BUILD_ONLY=1
+
+STATE="$HOME/.local/state/i3-wallpaper"
+CONTACT="$HOME/.config/lockscreen-contact"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/i3-wallpaper"
+REPO="${UI_MODE_REPO:-$HOME/.dotfiles/configs}"
+
+mkdir -p "$CACHE"
+
+screen_size() {
+    xrandr --listmonitors 2>/dev/null | awk '/\*/ {
+        split($3, a, "/"); w = a[1]
+        split($3, b, "x"); split(b[2], c, "/"); h = c[1]
+        print w "x" h; exit
+    }'
+}
+
+# Fall back to a flat fill of the palette background if anything below fails, so
+# locking NEVER breaks. A screen that will not lock is a security problem, and a
+# missing wallpaper is not a reason to create one.
+fallback_lock() {
+    theme=$(cat "$HOME/.config/ui-theme" 2>/dev/null || echo carbonfox)
+    bg=$(sed -n 's/^bg=//p' "$REPO/themes/$theme.env" 2>/dev/null | head -1)
+    exec i3lock -n -c "$(printf '%s' "${bg:-#161616}" | tr -d '#')"
+}
+
+SIZE=$(screen_size) || SIZE=""
+[ -n "$SIZE" ] || fallback_lock
+W=${SIZE%x*}; H=${SIZE#*x}
+
+image=$(cat "$STATE" 2>/dev/null || echo "")
+[ -n "$image" ] && [ -r "$image" ] || fallback_lock
+command -v convert >/dev/null 2>&1 || fallback_lock
+
+# Cache key covers everything that changes the output, so locking is instant
+# after the first time. Composing a 2560x1600 image takes a second or two, and
+# you do not want that between pressing the key and the screen going black.
+real=$(readlink -f "$image" 2>/dev/null || printf '%s' "$image")
+stamp=$(stat -c %Y "$real" 2>/dev/null || echo 0)
+cstamp=$(stat -c %Y "$CONTACT" 2>/dev/null || echo 0)
+key=$(printf '%s %s %s %s' "$real" "$stamp" "$SIZE" "$cstamp" | sha1sum | cut -c1-16)
+OUT="$CACHE/lock-$key.png"
+
+build() {
+    tmp="$OUT.$$.png"
+    # Fill the screen and crop the overflow, so the aspect never distorts.
+    # Then darken: the wallpaper should still be recognisable, but a lock screen
+    # is read at a glance from a distance and white text over a bright photo is
+    # not readable. -30 brightness keeps the image while making text carry.
+    convert "$real[0]" \
+        -resize "${W}x${H}^" -gravity center -extent "${W}x${H}" \
+        -brightness-contrast -30x-10 \
+        "$tmp" 2>/dev/null || return 1
+
+    if [ -r "$CONTACT" ]; then
+        text=$(sed -e 's/[[:space:]]*$//' "$CONTACT" | grep -v '^[[:space:]]*#' | sed '/^$/d')
+        [ -n "$text" ] || { mv "$tmp" "$OUT"; return 0; }
+
+        # Point size scales with the screen so it is legible on any display.
+        pt=$(awk -v h="$H" 'BEGIN { printf "%d", (h/32 < 26 ? 26 : h/32) }')
+        lines=$(printf '%s\n' "$text" | wc -l)
+        spacing=10
+        pad=$(( pt ))
+        block=$(( lines * (pt + spacing) + pad * 2 ))
+        # Sit the panel a little above the bottom edge rather than against it.
+        offset=$(( H / 18 ))
+
+        # A translucent panel behind the text. Drop shadows alone are not enough:
+        # the photograph can be pale, busy or both exactly where the text lands,
+        # and a lock screen cannot choose its background. The panel guarantees
+        # contrast whatever is behind it, which matters because this is read by a
+        # stranger holding your laptop.
+        font=$(fc-match -f '%{file}' 'JetBrains Mono' 2>/dev/null || echo DejaVu-Sans-Mono)
+        convert "$tmp" \
+            -fill 'rgba(0,0,0,0.62)' \
+            -draw "rectangle 0,$(( H - offset - block )) $W,$(( H - offset ))" \
+            -font "$font" -pointsize "$pt" -interline-spacing "$spacing" \
+            -gravity south -fill '#f2f4f8' \
+            -annotate +0+"$(( offset + pad ))" "$text" \
+            "$tmp.txt.png" 2>/dev/null && mv "$tmp.txt.png" "$tmp"
+    fi
+    mv "$tmp" "$OUT"
+}
+
+[ -r "$OUT" ] || build || fallback_lock
+[ -r "$OUT" ] || fallback_lock
+
+# Drop older lock images; only the current one is ever wanted.
+find "$CACHE" -maxdepth 1 -name 'lock-*.png' ! -name "$(basename "$OUT")" -delete 2>/dev/null || true
+
+[ "$BUILD_ONLY" = 1 ] && { echo "$OUT"; exit 0; }
+
+# -n so it does not fork: xss-lock needs the process to stay in the foreground,
+# or it thinks locking finished immediately and the screen unlocks itself.
+exec i3lock -n -i "$OUT"
