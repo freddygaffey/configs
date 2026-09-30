@@ -1,50 +1,161 @@
-#!/usr/bin/env sh
-# i3bar status_command: i3status, with a GPU block spliced in.
-#
-# i3status has no "run this command" module, so the documented way to add one is
-# to wrap it and edit its JSON on the way past. The protocol is:
-#
-#   {"version":1,...}        header, once
-#   [                        opening bracket of an infinite array, once
-#   [{...},{...}]            one line per refresh
-#   ,[{...},{...}]           every subsequent line, comma-prefixed
-#
-# So: pass the first two lines through untouched, then for each later line strip
-# the leading comma and '[', and re-emit with our block inserted at the front.
-#
-# IFS= and read -r so a block's text is never mangled by whitespace or
-# backslashes.
+#!/usr/bin/env python3
+"""i3bar status_command: i3status, with the bits i3status cannot do itself.
 
-set -u
+i3status modules only support fixed thresholds and fixed format strings, so
+anything conditional has to happen out here. This wrapper:
 
-CONF="${1:-$HOME/.config/i3/i3status.conf}"
-GPU="$HOME/.config/i3/scripts/gpu-status"
+  - inserts a GPU block just after the platform profile
+  - colour-codes load against this machine's 24 threads
+  - shortens the profile name ("power-saver" is wide for what it tells you)
+  - drops the battery wattage when nothing is actually flowing
 
-i3status -c "$CONF" | {
-    # Header line, then the opening '['.
-    IFS= read -r line && printf '%s\n' "$line"
-    IFS= read -r line && printf '%s\n' "$line"
+The i3bar protocol i3status speaks:
 
-    while IFS= read -r line; do
-        prefix=''
-        case "$line" in
-            ,*)
-                prefix=','
-                line=${line#,}
-                ;;
-        esac
+    {"version":1}            header, once
+    [                        opening bracket of an infinite array, once
+    [{...},{...}]            one line per refresh
+    ,[{...},{...}]           every line after the first, comma-prefixed
 
-        if [ -x "$GPU" ]; then
-            gpu=$("$GPU" 2>/dev/null)
-        else
-            gpu=''
-        fi
+Requires output_format = "i3bar" in i3status.conf — i3status auto-detects and
+falls back to plain text when it is not talking straight to i3bar.
+"""
 
-        if [ -n "$gpu" ]; then
-            printf '%s[{"name":"gpu","full_text":"%s"},%s\n' \
-                   "$prefix" "$gpu" "${line#[}"
-        else
-            printf '%s%s\n' "$prefix" "$line"
-        fi
-    done
+import json
+import os
+import re
+import subprocess
+import sys
+
+CONF = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
+    "~/.config/i3/i3status.conf")
+GPU = os.path.expanduser("~/.config/i3/scripts/gpu-status")
+
+# carbonfox, matching the rest of the bar
+GOOD = "#25be6a"
+WARN = "#f1c21b"
+BAD = "#ee5396"
+
+# 24 threads (8 P + 16 E), so a load of 4 is idle-ish and 8 is unremarkable.
+# A single max_threshold cannot express that, which is why load is coloured here.
+LOAD_WARN = 8.0
+LOAD_BAD = 18.0
+
+# "performance" and "power-saver" are wide for one word of information.
+PROFILE_SHORT = {
+    "performance": "perf",
+    "balanced": "bal",
+    "power-saver": "save",
+    "low-power": "save",
+    "quiet": "quiet",
 }
+
+
+def gpu_block():
+    """GPU utilisation and memory, or None if unavailable."""
+    try:
+        text = subprocess.run([GPU], capture_output=True, text=True,
+                              timeout=4).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return {"name": "gpu", "full_text": text} if text else None
+
+
+def colour_load(block):
+    """Colour the load block by how loaded the machine actually is."""
+    match = re.search(r"([\d.]+)", block.get("full_text", ""))
+    if not match:
+        return
+    value = float(match.group(1))
+    if value >= LOAD_BAD:
+        block["color"] = BAD
+    elif value >= LOAD_WARN:
+        block["color"] = WARN
+    else:
+        block["color"] = GOOD
+
+
+def shorten_profile(block):
+    text = block.get("full_text", "").strip()
+    block["full_text"] = "\u26a1 " + PROFILE_SHORT.get(text, text)
+
+
+def compact_sizes(block):
+    """'9 GiB/31 GiB' -> '9/31G'. i3status can pick the unit but always spells
+    it out, and three of these blocks sit side by side."""
+    text = block.get("full_text", "")
+    text = re.sub(r"\s*GiB", "G", text)
+    text = re.sub(r"\s*MiB", "M", text)
+    text = re.sub(r"\s*TiB", "T", text)
+    # '9G/31G' -> '9/31G': the unit on both halves is noise.
+    text = re.sub(r"(\d)G/(\d+)G", r"\1/\2G", text)
+    block["full_text"] = text
+
+
+def tidy_battery(block):
+    """Drop '0.00 W' — plugged in and full means nothing is flowing, and a
+    zero reading just takes up room next to the percentage."""
+    block["full_text"] = re.sub(r"\s*0\.00\s*W", "", block.get("full_text", ""))
+
+
+def transform(blocks):
+    for block in blocks:
+        name = block.get("name")
+        if name == "load":
+            colour_load(block)
+        elif name == "read_file":
+            # NB read_file's `instance` is the file path, not the module name,
+            # so match on the name alone — there is only one such module.
+            shorten_profile(block)
+        elif name == "battery":
+            tidy_battery(block)
+        elif name in ("memory", "disk_info"):
+            compact_sizes(block)
+
+    # Immediately after the profile block, so the power readings sit together.
+    index = next((i for i, b in enumerate(blocks)
+                  if b.get("name") == "read_file"), -1)
+    block = gpu_block()
+    if block is not None:
+        blocks.insert(index + 1, block)
+
+    # Drop empty blocks. A module with format_down = "" still emits a block, and
+    # i3bar draws a separator around it — so a disconnected ethernet port shows
+    # up as a stray '|' in the middle of the bar.
+    return [b for b in blocks if b.get("full_text", "").strip()]
+
+
+def main():
+    proc = subprocess.Popen(["i3status", "-c", CONF],
+                            stdout=subprocess.PIPE, text=True)
+
+    # Header and the opening '[' pass through untouched.
+    for _ in range(2):
+        line = proc.stdout.readline()
+        if not line:
+            return
+        sys.stdout.write(line)
+        sys.stdout.flush()
+
+    for line in proc.stdout:
+        line = line.rstrip("\n")
+        prefix = ""
+        if line.startswith(","):
+            prefix, line = ",", line[1:]
+
+        try:
+            blocks = transform(json.loads(line))
+        except (json.JSONDecodeError, ValueError):
+            # Pass anything unexpected straight through rather than kill the bar.
+            sys.stdout.write(prefix + line + "\n")
+            sys.stdout.flush()
+            continue
+
+        sys.stdout.write(prefix + json.dumps(blocks) + "\n")
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

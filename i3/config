@@ -221,9 +221,17 @@ for_window [window_role="bubble"]      floating enable
 for_window [window_role="task_dialog"] floating enable
 for_window [window_type="dialog"]      floating enable
 for_window [window_type="menu"]        floating enable
+for_window [window_type="utility"]     floating enable
+for_window [window_type="toolbar"]     floating enable
+for_window [window_type="notification"] floating enable
+for_window [window_type="splash"]      floating enable
 for_window [class="Pavucontrol"]       floating enable
 for_window [class="Blueman-manager"]   floating enable
 for_window [class="Nm-connection-editor"] floating enable
+# Small always-on-top utilities. Tiling these just shoves your real windows
+# around for something you glance at and dismiss.
+for_window [class="gnome-calculator"]  floating enable
+for_window [class="Gnome-calculator"]  floating enable
 
 # ── Hardware keys (GNOME used to handle these) ─────────────────────────
 # brightnessctl needs no root: the package ships a udev rule granting the
@@ -244,14 +252,18 @@ bindsym XF86Launch1 exec --no-startup-id ~/.config/i3/scripts/cycle-power-profil
 bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profile
 
 # Screenshots — flameshot, on the Print key (next to Delete).
-#   Print              whole screen, straight to the clipboard, no prompting
-#   Shift+Print        drag a region with the annotation toolbar, then copy or
-#                      save from it — the macOS Cmd+Shift+4 equivalent
+#   Print              drag a region with the annotation toolbar — the common
+#                      case, so it gets the bare key
+#   Shift+Print        whole screen straight to the clipboard, no prompting
 #   Ctrl+Shift+Print   whole screen, with a Save dialog
 #
-# saveAfterCopy=true in flameshot.ini means the two clipboard paths also drop a
-# file in ~/Pictures/Screenshots, so nothing is lost if the clipboard is
-# overwritten before you paste.
+# Inside the region UI (set in flameshot.ini's [Shortcuts]):
+#   Return             copy to clipboard
+#   Shift+Return       save, with the file dialog
+#   Ctrl+Return        accept (moved off Return so it does not collide)
+#
+# saveAfterCopy=true means the clipboard paths also drop a file in
+# ~/Pictures/Screenshots, so nothing is lost if you paste over the clipboard.
 #
 # Under GNOME this key is grabbed by GNOME's own screenshot UI (which is why it
 # never shows up in xev there). i3 sets no such grab, so it reaches these.
@@ -289,11 +301,11 @@ bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profil
 # Both 107 and 218 are bound because this machine's keymap defines Print on both
 # (two internal ITE keyboards). Only one is physically present, so nothing
 # double-fires.
-bindcode 107            exec --no-startup-id flameshot full -c
-bindcode Shift+107      exec --no-startup-id flameshot gui
+bindcode 107            exec --no-startup-id flameshot gui
+bindcode Shift+107      exec --no-startup-id flameshot full -c
 bindcode Ctrl+Shift+107 exec --no-startup-id flameshot full
-bindcode 218            exec --no-startup-id flameshot full -c
-bindcode Shift+218      exec --no-startup-id flameshot gui
+bindcode 218            exec --no-startup-id flameshot gui
+bindcode Shift+218      exec --no-startup-id flameshot full -c
 bindcode Ctrl+Shift+218 exec --no-startup-id flameshot full
 
 # Calculator. gnome-calculator ships with Ubuntu and does unit/base conversion,
@@ -330,9 +342,13 @@ bindsym $mod+Shift+e exec --no-startup-id i3-nagbar -t warning \
 # ── Bar ────────────────────────────────────────────────────────────────
 bar {
     # Wrapped rather than calling i3status directly: i3status has no "run this
-    # command" module, so scripts/status splices a GPU block into its JSON.
+    # command" module, so scripts/status splices a GPU block into its JSON,
+    # colour-codes load, and compacts the units.
     status_command ~/.config/i3/scripts/status ~/.config/i3/i3status.conf
     position top
+    # Smaller than i3's own 11pt font: the bar holds a lot of readings and this
+    # is the cheapest way to fit more without shortening them further.
+    font pango:JetBrains Mono 9
     tray_output primary
     separator_symbol " | "
     colors {
