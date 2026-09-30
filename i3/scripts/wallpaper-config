@@ -39,6 +39,7 @@ unasked.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import mimetypes
@@ -150,8 +151,20 @@ def image_size(image: Path) -> list[int]:
         return [0, 0]
 
 
+PREVIEW_CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) \
+    / "i3-wallpaper" / "previews"
+
+
 def preview_bytes(image: Path, box: int = 1400) -> tuple[bytes, str]:
     """A downscaled preview, so the browser is not handed a 7000px original.
+
+    Cached on disk, because this is the whole cost of the app: decoding a
+    5616x3143 PNG with PIL takes ~0.4s, and without a cache that was paid again
+    on every single image change — which is what made stepping through 70 images
+    feel laggy. Cached, the same request is a file read.
+
+    Keyed on path + mtime + box, so editing or replacing an image invalidates it
+    by itself and there is nothing to clear by hand.
 
     Falls back to the raw file when PIL is missing — correct, just slower.
     """
@@ -159,15 +172,39 @@ def preview_bytes(image: Path, box: int = 1400) -> tuple[bytes, str]:
         from PIL import Image
     except ImportError:
         return image.read_bytes(), mimetypes.guess_type(image.name)[0] or "image/png"
+
+    try:
+        stamp = f"{image}|{image.stat().st_mtime_ns}|{box}"
+    except OSError:
+        return b"", "image/jpeg"
+    key = hashlib.sha1(stamp.encode()).hexdigest()[:20]
+    cached = PREVIEW_CACHE / f"{key}.jpg"
+    if cached.is_file():
+        try:
+            return cached.read_bytes(), "image/jpeg"
+        except OSError:
+            pass
+
     try:
         with Image.open(image) as img:
             img = img.convert("RGB")
             img.thumbnail((box, box), Image.LANCZOS)
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=88)
-            return buf.getvalue(), "image/jpeg"
+            data = buf.getvalue()
     except Exception:                               # noqa: BLE001
         return image.read_bytes(), mimetypes.guess_type(image.name)[0] or "image/png"
+
+    try:
+        PREVIEW_CACHE.mkdir(parents=True, exist_ok=True)
+        # Write then rename, so a half-written file is never served if this is
+        # interrupted or two requests race for the same image.
+        tmp = cached.with_suffix(f".{os.getpid()}.tmp")
+        tmp.write_bytes(data)
+        tmp.replace(cached)
+    except OSError:
+        pass
+    return data, "image/jpeg"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -175,11 +212,14 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     # ------------------------------------------------------------------ helpers
-    def _send(self, code: int, body: bytes, ctype: str) -> None:
+    def _send(self, code: int, body: bytes, ctype: str, cache: str = "no-store") -> None:
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        # JSON must never be cached — it changes as you save. Previews are
+        # immutable for a given file mtime (which is in the URL), so they get
+        # the long immutable cache that makes flicking back and forth free.
+        self.send_header("Cache-Control", cache)
         self.end_headers()
         self.wfile.write(body)
 
@@ -199,7 +239,9 @@ class Handler(BaseHTTPRequestHandler):
                 "root": str(ROOT),
                 "current": current_display(),
                 "presets": PRESETS,
-                "images": [{"path": str(p), "name": p.name} for p in images],
+                "images": [{"path": str(p), "name": p.name,
+                            "v": p.stat().st_mtime_ns if p.exists() else 0}
+                           for p in images],
             })
         elif url.path == "/api/image":
             image = safe_image(query.get("path", [""])[0])
@@ -207,7 +249,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": "not found"}, 404)
                 return
             body, ctype = preview_bytes(image)
-            self._send(200, body, ctype)
+            self._send(200, body, ctype,
+                       cache="public, max-age=31536000, immutable")
         elif url.path == "/api/marks":
             # Which images already have an entry for this display. One request
             # instead of 70, so the list can show progress without a stampede.
@@ -394,6 +437,27 @@ function containScale() {
 }
 
 const msg = t => $("#msg").textContent = t;
+
+// mtime in the URL, so previews can be cached immutably by the browser while a
+// replaced image still fetches fresh.
+const previewURL = im => `/api/image?path=${encodeURIComponent(im.path)}&v=${im.v || 0}`;
+
+// Warm the next few images while you are looking at this one. Stepping through
+// 70 files with `space` is the main workflow, so the next decode should already
+// have happened by the time you get there. Browser cache holds them; there is
+// nothing to evict by hand.
+const warmed = new Set();
+function prefetch(from) {
+  for (let i = from; i < Math.min(from + 4, state.images.length); i++) {
+    const im = state.images[i];
+    const u = previewURL(im);
+    if (warmed.has(u)) continue;
+    warmed.add(u);
+    const g = new Image();
+    g.decoding = "async";
+    g.src = u;
+  }
+}
 const dispWH = () => $("#display").value.split("x").map(Number);
 
 // Frame size on screen: the display's aspect, as large as fits the stage.
@@ -418,7 +482,7 @@ async function boot() {
     `<div data-i="${i}" title="${im.name}">${im.name}</div>`).join("");
   $("#list").onclick = e => { const d = e.target.closest("[data-i]"); if (d) pick(+d.dataset.i); };
   sizeFrame();
-  if (state.images.length) { await refreshMarks(); pick(0); }
+  if (state.images.length) { await refreshMarks(); prefetch(0); pick(0); }
   else msg("No images under " + state.root);
 }
 
@@ -445,9 +509,10 @@ async function pick(i) {
   const img = $("#img");
   await new Promise(res => {
     img.onload = res; img.onerror = res;
-    img.src = "/api/image?path=" + encodeURIComponent(image.path);
+    img.src = previewURL(image);
   });
   nat = {w: img.naturalWidth, h: img.naturalHeight};
+  prefetch(idx + 1);
   cfg = await (await fetch("/api/config?path=" + encodeURIComponent(image.path))).json();
   orig = {w: (cfg.size && cfg.size[0]) || nat.w, h: (cfg.size && cfg.size[1]) || nat.h};
   loadEntry();
@@ -671,6 +736,21 @@ def main() -> None:
                         help="0.0.0.0 to reach it from another machine")
     parser.add_argument("--no-open", action="store_true")
     args = parser.parse_args()
+
+    # Build every preview in the background at startup. Generating one costs
+    # ~0.4s and there are ~70 images, so the first pass through the folder would
+    # otherwise be the slow one. Doing it up front means only the very first few
+    # seconds are cold, while you are still choosing an image.
+    #
+    # A daemon thread, so Ctrl+C exits immediately rather than waiting for it.
+    def warm_previews() -> None:
+        for image in list_images():
+            try:
+                preview_bytes(image)
+            except Exception:                       # noqa: BLE001 - best effort
+                pass
+
+    threading.Thread(target=warm_previews, daemon=True).start()
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://{'127.0.0.1' if args.host == '0.0.0.0' else args.host}:{args.port}/"
