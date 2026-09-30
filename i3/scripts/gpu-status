@@ -17,6 +17,17 @@ DEV=/sys/bus/pci/devices/0000:01:00.0/power/runtime_status
 
 [ -r "$DEV" ] || { printf 'gpu n/a'; exit 0; }
 
+# Is the driver actually loaded? This file only exists once the nvidia kernel
+# module is up. Checking it separately matters because "no driver" and "asleep"
+# look identical from runtime_status but mean opposite things: an unbound card
+# reads "active" while doing nothing, since with no driver there is nothing to
+# runtime-suspend it.
+#
+# This is a real failure mode here, not a theoretical one: a kernel upgrade
+# (7.0.0-31 -> -34) left linux-modules-nvidia-580-open pinned to the old kernel,
+# so no module matched the running one and the card sat unbound.
+[ -e /proc/driver/nvidia/version ] || { printf 'gpu --'; exit 0; }
+
 if [ "$(cat "$DEV")" != "active" ]; then
     printf 'gpu zZ'
     exit 0
@@ -46,7 +57,16 @@ if cache_fresh; then
 else
     read_gpu=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total \
                --format=csv,noheader,nounits 2>/dev/null | head -1)
-    [ -n "$read_gpu" ] && printf '%s\n' "$read_gpu" > "$CACHE"
+    # Validate BEFORE caching. nvidia-smi prints its failure banner
+    # ("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA
+    # driver...") to STDOUT, not stderr — so 2>/dev/null does not suppress it and
+    # a non-empty check happily accepts it. Unvalidated, that sentence gets
+    # parsed as CSV, rendered into the bar, and then cached for 30s.
+    # Expected shape is three numbers: "12, 345, 8188".
+    case "$read_gpu" in
+        [0-9]*,\ [0-9]*,\ [0-9]*) printf '%s\n' "$read_gpu" > "$CACHE" ;;
+        *) read_gpu="" ;;
+    esac
 fi
 
 [ -n "$read_gpu" ] || { printf 'gpu ?'; exit 0; }
