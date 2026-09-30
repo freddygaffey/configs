@@ -10,9 +10,9 @@
 #
 # SCOPE: this script only ever touches $HOME and installs packages. It changes
 # nothing in /etc — no suspend settings, no udev rules, no services. Host-level
-# configuration lives in system/legion.sh, which you run deliberately and which
+# configuration lives in the system/ scripts, which you run deliberately and which
 # is not invoked from here. That separation is the point: this file is safe to
-# curl onto any Linux desktop; system/legion.sh is not.
+# curl onto any Linux desktop; the system/ scripts are not.
 #
 # Safe to re-run. Existing configs are backed up to *.bak, same as bootstrap.sh.
 set -euo pipefail
@@ -184,5 +184,5 @@ cat <<'DONE'
   $mod+Shift+e exit i3
 
   Host-level settings (suspend, AC/battery power profile, Tailscale) are NOT
-  configured by this script. Review and run system/legion.sh for those.
+  configured by this script. See system/ for those — one script per change.
 DONE

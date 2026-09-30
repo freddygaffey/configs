@@ -1,114 +1,54 @@
 # system/
 
-Host-level configuration. **Not** run by any bootstrap script.
+Host-level setup for the Legion 5 16IRX9. **Not** run by any bootstrap script —
+these write to `/etc`, mask systemd units, and are specific to one laptop.
 
-`bootstrap.sh` and `bootstrap-desktop.sh` only touch `$HOME` and install
-packages, so they are safe to `curl | bash` onto any machine. Everything in this
-directory writes to `/etc`, masks systemd units, or changes firmware-adjacent
-settings, and is specific to one physical laptop. Running `legion.sh` on a server
-would disable its suspend handling and add a udev rule for a battery it does not
-have.
+One script per change, each short enough to read before running. Run the ones you
+want; they're independent. Every script has its undo in the header comment.
 
-## legion.sh
-
-Lenovo Legion 5 16IRX9 — i9-14900HX, RTX 4070 Mobile + Intel iGPU, 2560x1600
-@165 Hz, 74.5 Wh battery on `BAT1`.
-
-```sh
-./system/legion.sh --dry-run   # print every change, make none
-./system/legion.sh             # apply, after confirming
-```
-
-| Step | What | Why |
-|---|---|---|
-| 1 | Disable suspend | Reached over ssh; lid-close suspend makes it unreachable and it cannot wake over WiFi |
-| 2 | udev AC/battery power profile | PPD doesn't switch on unplug; GNOME only does so at ~20% battery. Worth ~5-8 W |
-| 3 | Mask `nvidia-persistenced` | Can hold the dGPU awake; the dGPU is ~12 W, about 40% of total draw |
-| 4 | VA-API packages | Without hardware video decode a browser costs 10-20 W instead of 3-5 W |
-| 5 | Cap snap retention at 2 | Old revisions had grown to ~65 GB |
-| 6 | Battery conservation (opt-in) | Caps charge ~60%; reduces calendar wear on an always-plugged host |
-| 7 | Reduce tracker scope | It was indexing ~600 GB of archives and corpora |
-| 8 | Narrow NOPASSWD sudo allowlist | See [sudoers](#sudoers) below |
-
-Each step is idempotent, skippable via `SKIP_<STEP>=1`, and its reversal is
-documented in the comment above it in the script.
-
-### Verify
-
-```sh
-systemctl is-enabled sleep.target                             # masked
-cat /sys/firmware/acpi/platform_profile                       # performance on AC
-cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status     # suspended
-vainfo | grep VAProfileH264High                               # hardware decode
-awk '{print $1/1000000" W"}' /sys/class/power_supply/BAT1/power_now   # unplugged only
-sudo -l | grep rfcomm                                         # bind/release/show/connect
-sudo rfcomm listen 0 1 /bin/sh                                # must be REFUSED
-```
-
-Optional preferences (conservation mode, per-step skips) go in `local.env`
-(gitignored); see `local.env.example`. Nothing secret lives in this repo.
-
-Tailscale is deliberately **not** handled here — `sudo tailscale up --ssh` once,
-enable MagicDNS in the admin console, done. Wrapping a one-time interactive
-command in a script adds nothing.
+| Script | What |
+|---|---|
+| `no-suspend.sh` | Lid close no longer suspends — it's reached over ssh and can't wake over WiFi |
+| `power-on-ac.sh` | udev rule: `performance` on AC, `power-saver` on battery (~5-8 W) |
+| `dgpu-sleep.sh` | Mask `nvidia-persistenced` so the dGPU can runtime-suspend (~12 W) |
+| `vaapi.sh` | Hardware video decode — a browser costs 10-20 W without it, 3-5 W with |
+| `snap-retain.sh` | Cap snap revisions at 2; prints the commands to reclaim ~30-45 GB |
+| `sudoers.sh` | Install the NOPASSWD allowlist (validated first) |
+| `tracker-scope.sh` | Stop tracker indexing ~600 GB of archives and corpora |
+| `battery-conservation.sh on\|off` | Cap charge at ~60% for an always-plugged host |
 
 ## sudoers
 
-`sudoers.d/10-fred-ops` is a deliberately tiny NOPASSWD allowlist. An allowlist
-is only meaningful if every entry is *genuinely* limited, so `apt`, `systemctl`,
-`tee`, `dd` and `turbostat` are all absent — each is equivalent to full
-passwordless root (`turbostat -- <cmd>` runs `<cmd>` as root; package scripts run
-arbitrary code; `tee` is an arbitrary root write).
+`sudoers.d/10-fred-ops` is a small NOPASSWD allowlist: `powerprofilesctl`,
+`tailscale`, `dmesg`, `brightnessctl`, `lsof`, `dmidecode -t *`, and `rfcomm`
+limited to `bind`/`release`/`show`/`connect` (for Bluetooth MAVLink).
 
-The consequence is intentional: `legion.sh` still asks for a password once. That
-prompt is the only thing between a compromised user session and permanent root.
+`apt`, `systemctl`, `tee` and `turbostat` are deliberately absent — each is
+equivalent to full passwordless root, so including them would make the allowlist
+pointless. `turbostat -- <cmd>` runs `<cmd>` as root; `rfcomm listen`/`watch` do
+the same, hence the subcommand limit. `dmidecode` is pinned to two arguments so
+`--dump-bin <path>` can't be appended as an arbitrary root write.
 
-Allowed: `powerprofilesctl`, `tailscale`, `dmesg`, `brightnessctl`, `lsof`,
-`dmidecode -t *`, and `rfcomm` restricted to `bind` / `release` / `show` /
-`connect`.
-
-Two restrictions that matter:
-
-- **`rfcomm` excludes `listen` and `watch`.** Both take a command argument and
-  execute it as root on connection, so an unrestricted `rfcomm` entry would be
-  full passwordless root wearing a Bluetooth costume.
-- **`dmidecode` is pinned to two arguments** (`-t *`) so `--dump-bin <path>`, an
-  arbitrary root file write, cannot be appended.
-
-Install is always `visudo -cf` **before** the file reaches `/etc`, then
-`install -m 0440 root:root`, then a full `visudo -c` with automatic rollback on
-conflict. A malformed sudoers file locks you out of `sudo`; recovery is a root
-shell or a live USB.
-
-### Bluetooth MAVLink
-
-What the `rfcomm` entries are for:
+Bluetooth MAVLink:
 
 ```sh
-sudo rfcomm bind 0 <MAC> 1                              # /dev/rfcomm0, root:dialout
+sudo rfcomm bind 0 <MAC> 1     # /dev/rfcomm0, root:dialout — you're in dialout
 mavproxy.py --master=/dev/rfcomm0 --out=udpout:<mac-host>:14550
 sudo rfcomm release 0
 ```
 
-`fred` is in `dialout`, so MAVProxy itself needs no sudo — only the bind does.
+## Not done here
 
-### RAPL counters — left alone on purpose
+**Tailscale** — `sudo tailscale up --ssh` once, enable MagicDNS in the admin
+console. One-time and interactive; a script adds nothing.
 
-`/sys/class/powercap/intel-rapl:*/energy_uj` is the package energy counter, and
-the only way to split draw into CPU vs iGPU vs rest (`BAT1/power_now` is
-whole-system only). It ships `0400 root` and this script leaves it that way.
-
-An earlier revision loosened it so power logging could run unprivileged. Reverted:
-those counters were locked down in response to **PLATYPUS (CVE-2020-8694)**, where
-fine-grained energy readings leak data-dependent power draw precisely enough to
-recover AES and RSA keys from another process. Convenient power graphs are not
-worth reopening that.
-
-When the detail is actually needed, either run `turbostat` with a password prompt,
-or open it temporarily:
+**RAPL counters** (`/sys/class/powercap/intel-rapl:*/energy_uj`) stay `0400 root`.
+They're the only way to split draw into CPU vs iGPU, but were locked down over
+CVE-2020-8694, where fine-grained energy readings leak enough to recover AES keys
+from another process. When you need the detail, open it for the duration:
 
 ```sh
 sudo chmod a+r /sys/class/powercap/intel-rapl:0/energy_uj
 ```
 
-Nothing persists that — a reboot restores `0400`, which is the point.
+A reboot restores `0400`, which is the point.

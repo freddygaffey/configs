@@ -13,14 +13,17 @@ boundary, not a style preference:
 |---|---|---|---|
 | Terminal | `bootstrap.sh`, `bootstrap-lite.sh` | `$HOME`, packages | yes |
 | Desktop | `bootstrap-desktop.sh` | `$HOME`, packages | yes (guards: Linux + apt, warns without a display) |
-| Host | `system/legion.sh` | `/etc`, systemd units, sysfs | **no — one specific laptop** |
+| Host | `system/*.sh` | `/etc`, systemd units, sysfs | **no — one specific laptop** |
 
-`system/legion.sh` must never be invoked from a bootstrap script. It disables
-suspend, adds udev rules and masks services; correct for the one laptop it names,
-actively harmful on a server. It requires an interactive confirmation and
-supports `--dry-run`. Every step in it is idempotent, skippable via
-`SKIP_<STEP>=1`, and has its reversal written in the comment directly above it —
-preserve that convention when adding steps.
+The `system/` scripts must never be invoked from a bootstrap script. They disable
+suspend, add udev rules and mask services; correct for one laptop, actively
+harmful on a server.
+
+One script per change, ~10 lines each, with its undo in the header comment. That
+is deliberate and replaced an earlier single 294-line script with a `--dry-run`
+mode, `SKIP_*` flags and an `eval`-based runner — the framework had outgrown the
+work. A script short enough to read before running needs no dry-run mode. Keep new
+ones that way.
 
 Anything genuinely one-time and interactive does **not** belong in these scripts.
 Tailscale is the worked example: `sudo tailscale up --ssh` once, by hand. A script
@@ -45,9 +48,9 @@ nvim --headless "+Lazy! sync" +qa   # install/update plugins (uses whichever ini
 
 Reload tmux config without restarting: `Ctrl-a r` (or `tmux source-file ~/.config/tmux/tmux.conf`).
 
-Shell scripts: `bash -n <file>` to syntax-check, and `./system/legion.sh --dry-run`
-prints every command it would run without running any. i3: `i3 -C -c i3/config`
-validates the config without a running WM; `i3-msg reload` applies it live.
+Shell scripts: `sh -n <file>` / `bash -n <file>` to syntax-check; `visudo -cf` for
+the sudoers file. i3: `i3 -C -c i3/config` validates the config without a running
+WM; `i3-msg reload` applies it live.
 
 ## Workflow: commit, push, then pull back via curl
 

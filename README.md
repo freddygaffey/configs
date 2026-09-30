@@ -142,13 +142,13 @@ built-in `pbcopy`. tmux auto-detects which.
 |---|---|---|---|
 | Terminal | `bootstrap.sh` / `bootstrap-lite.sh` | `$HOME`, packages | yes |
 | Desktop | `bootstrap-desktop.sh` | `$HOME`, packages | yes (refuses non-desktop) |
-| Host | `system/legion.sh` | `/etc`, systemd units, sysfs | **no — one specific laptop** |
+| Host | `system/*.sh` | `/etc`, systemd units, sysfs | **no — one specific laptop** |
 
 The split is the point. The first two only ever symlink into `$HOME` and install
-packages, so they are safe on any box. `system/legion.sh` disables suspend, adds
-udev rules and masks services — correct for one laptop, actively wrong on a
-server. It is never invoked by a bootstrap script; you run it deliberately, and
-it has a `--dry-run`.
+packages, so they are safe on any box. The `system/` scripts disable suspend, add
+udev rules and mask services — correct for one laptop, actively wrong on a server.
+They are never invoked by a bootstrap script: one script per change, each short
+enough to read before you run it.
 
 ## i3 notes
 
@@ -161,6 +161,22 @@ of `i3/config`. The short version:
 | Direction keys | `j k l ;` | **`h j k l`** | matches tmux and nvim |
 | Launcher | dmenu | **rofi** | also does window switching |
 | Compositor | none | none | costs battery on a hybrid GPU for unused transparency |
+
+**Cheat sheet:** the official [i3 reference card](https://i3wm.org/docs/refcard.html)
+and [user guide](https://i3wm.org/docs/userguide.html). Read it with two
+substitutions: where it shows the modifier, use **Super** (the card itself notes
+Mod4 as "a popular alternative"), and where it shows `j k l ;` for directions, use
+`h j k l`.
+
+Bindings not on the card:
+
+| Key | Action |
+|---|---|
+| `Super+Tab` | window switcher (rofi) |
+| `Super+p` | cycle power profile |
+| `Super+Ctrl+q` | lock |
+| `Super+bar` / `Super+backslash` | split h / v (tmux-style aliases for `b` / `v`) |
+| `Print` / `Shift+Print` | screenshot, full / region, to clipboard |
 
 i3 installs alongside GNOME as a login-screen option; GNOME stays the default
 until you pick otherwise. Everything GNOME did implicitly is wired up explicitly
