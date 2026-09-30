@@ -21,6 +21,17 @@ for candidate in \
 do
     [ -n "$candidate" ] || continue
     if [ -x "$candidate/.venv/bin/python" ] && [ -f "$candidate/src/dictate.py" ]; then
+        # Lyrebird is a dependency; its CONFIG lives in this repo. Link it in so
+        # the settings are version-controlled and survive the checkout being
+        # moved, reinstalled or deleted — which has already happened once.
+        # Lyrebird reads config/config.local.ini as an overlay on its own
+        # defaults, and gitignores it, so the committed values stay right for
+        # the Mac.
+        want="$HOME/.dotfiles/configs/lyrebird/config.local.ini"
+        have="$candidate/config/config.local.ini"
+        if [ -r "$want" ] && [ "$(readlink -f "$have" 2>/dev/null)" != "$want" ]; then
+            ln -sfn "$want" "$have" 2>/dev/null || true
+        fi
         cd "$candidate" || exit 1
         exec ./.venv/bin/python src/dictate.py "$@"
     fi

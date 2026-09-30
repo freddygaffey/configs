@@ -60,6 +60,30 @@ UI_MODE_FILE = os.path.expanduser("~/.config/ui-mode")
 MODE_GLYPH = {"dark": "\u25cf", "light": "\u25d0", "fly": "\u25cb"}
 
 
+def dictation_block():
+    """A recording indicator, so you can tell at a glance that the mic is live.
+
+    Lyrebird writes its state to $XDG_RUNTIME_DIR/lyrebird.state. Reading a tiny
+    file is cheap enough to do on every bar refresh, and means the bar needs no
+    connection to the daemon — if the daemon dies the file simply stops saying
+    "listening". Nothing is shown when idle, so the bar is unchanged the 99% of
+    the time you are not dictating.
+    """
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "lyrebird.state")
+    try:
+        with open(path) as fh:
+            state = fh.read().strip()
+    except OSError:
+        return None
+    if state == "listening":
+        return {"name": "dictation", "full_text": " ● REC ",
+                "color": "#161616", "background": "#ee5396"}
+    if state == "busy":
+        return {"name": "dictation", "full_text": " … transcribing ",
+                "color": "#161616", "background": "#f1c21b"}
+    return None
+
+
 def ui_mode_block():
     """Which UI mode is active. Written by i3/scripts/ui-mode."""
     try:
@@ -228,6 +252,12 @@ def transform(blocks):
     mode = ui_mode_block()
     if mode is not None:
         blocks.insert(1 if blocks else 0, mode)
+
+    # Recording indicator goes first: when the mic is live that is the single
+    # most important thing on the bar.
+    rec = dictation_block()
+    if rec:
+        blocks.insert(0, rec)
 
     # Drop empty blocks. A module with format_down = "" still emits a block, and
     # i3bar draws a separator around it — so a disconnected ethernet port shows
