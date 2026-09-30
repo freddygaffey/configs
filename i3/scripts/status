@@ -150,6 +150,37 @@ def colour_gpu(block):
     block["color"] = BAD if util >= 80 else WARN if util >= 40 else GOOD
 
 
+# U+F1EB (nf-fa-wifi), by codepoint rather than pasted literally — private-use
+# glyphs do not survive every heredoc and copy-paste, and a literal one silently
+# became an empty string once already.
+WIFI_ICON = "\uf1eb"
+
+
+def iconify_wifi(block):
+    """Replace the word "wifi" with the glyph, and merge this block visually
+    with the bluetooth one that follows by suppressing the separator between
+    them — the two radios read as one control, not two readings."""
+    text = block.get("full_text", "")
+    block["full_text"] = text.replace("wifi", WIFI_ICON).strip()
+    block["separator"] = False
+    block["separator_block_width"] = 12
+
+
+def colour_battery(block):
+    """Colour by how much is left. i3status only offers a single low_threshold,
+    which cannot say "fine / getting on / plug it in"."""
+    match = re.search(r"(\d+)%", block.get("full_text", ""))
+    if not match:
+        return
+    pct = int(match.group(1))
+    if pct <= 15:
+        block["color"] = BAD
+    elif pct <= 40:
+        block["color"] = WARN
+    else:
+        block["color"] = GOOD
+
+
 def colour_volume(block):
     # format_muted is "vol ---", so muted is visible by shape as well as colour.
     if "---" in block.get("full_text", ""):
@@ -181,6 +212,10 @@ def transform(blocks):
             compact_sizes(block)
         elif name == "volume":
             colour_volume(block)
+        elif name == "wireless":
+            iconify_wifi(block)
+        elif name == "battery":
+            colour_battery(block)
 
     # Immediately after the profile block, so the power readings sit together.
     index = next((i for i, b in enumerate(blocks)
