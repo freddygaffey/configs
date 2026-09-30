@@ -186,8 +186,61 @@ cat <<'DONE'
 
   $mod is Super.  $mod+Return terminal   $mod+d launcher   $mod+Tab windows
   $mod+Shift+q close   $mod+r resize mode   $mod+p cycle power profile
-  $mod+Shift+e exit i3
-
-  Host-level settings (suspend, AC/battery power profile, Tailscale) are NOT
-  configured by this script. See system/ for those — one script per change.
+  $mod+Shift+/ help   $mod+Shift+e exit i3
 DONE
+
+# ── 6. Offer the host-level scripts ────────────────────────────────────
+# These stay separate files, because they write to /etc and are specific to one
+# laptop — but printing "see system/" at the end is a note nobody acts on, so
+# ask instead. Each is still its own script you can read and run by hand.
+#
+# Only prompts on a real terminal. Under `curl | bash` stdin is the script
+# itself, so read from /dev/tty; with no tty at all (truly unattended) skip
+# entirely rather than hanging. Same idiom as bootstrap.sh's swap prompt.
+offer_system_scripts() {
+  if [ ! -e /dev/tty ]; then
+    info "No terminal — skipping host-level setup. See system/."
+    return 0
+  fi
+  local ans name desc
+  printf '\n\033[0;33m??\033[0m Configure host-level settings now? They write to /etc. [y/N] ' > /dev/tty
+  read -r ans < /dev/tty || return 0
+  case "$ans" in
+    y|Y|yes|YES) ;;
+    *) info "Skipped — run them from system/ whenever you like."; return 0 ;;
+  esac
+
+  # name:description — asked one at a time, because wanting one of these is no
+  # reason to want all of them.
+  for entry in \
+    "no-suspend:lid close stops suspending (needed to reach this box over ssh)" \
+    "power-on-ac:performance on AC, power-saver on battery (~5-8 W)" \
+    "dgpu-sleep:let the dGPU runtime-suspend (~12 W)" \
+    "vaapi:hardware video decode (browser: 10-20 W -> 3-5 W)" \
+    "sudoers:narrow NOPASSWD allowlist" \
+    "tracker-scope:stop indexing the bulk archives" \
+    "snap-retain:cap snap revisions at 2"
+  do
+    name=${entry%%:*}
+    desc=${entry#*:}
+    [ -x "$DOTFILES/system/$name.sh" ] || continue
+    printf '   %-16s %s\n     run it? [y/N] ' "$name" "$desc" > /dev/tty
+    read -r ans < /dev/tty || return 0
+    case "$ans" in
+      y|Y|yes|YES)
+        # Never let one failure abort the rest, or a missing package early on
+        # silently skips everything after it.
+        "$DOTFILES/system/$name.sh" || warn "system/$name.sh failed — continuing"
+        ;;
+    esac
+  done
+
+  cat <<'EXTRA' > /dev/tty
+
+  Not offered above, deliberately:
+    ./system/battery-conservation.sh on   caps charge ~60%; only for a machine
+                                          that lives plugged in
+    sudo tailscale up --ssh               one-time and interactive
+EXTRA
+}
+offer_system_scripts
