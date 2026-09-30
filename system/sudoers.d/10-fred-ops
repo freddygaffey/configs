@@ -50,27 +50,37 @@ fred ALL=(root) NOPASSWD: /usr/bin/brightnessctl
 #   (and therefore burning ~12 W) means looking at who has /dev/nvidia* open.
 fred ALL=(root) NOPASSWD: /usr/bin/lsof
 
-# rfcomm — Bluetooth serial. DANGEROUS unrestricted: `rfcomm listen` and
-#   `rfcomm watch` both take a command argument and RUN IT AS ROOT on connection,
-#   so a bare `/usr/bin/rfcomm` entry would be full passwordless root wearing a
-#   Bluetooth costume. Only the subcommands that cannot execute anything are
-#   listed, each pinned to a fixed argument count.
+# rfcomm — Bluetooth serial, for MAVLink over a BT link.
 #
-#   Verify the restriction actually holds after installing — `sudo -l` shows the
-#   effective rules, and `sudo rfcomm listen 0 1 /bin/sh` must be REFUSED:
-#       sudo -l | grep rfcomm
-#       sudo rfcomm listen 0 1 /bin/sh     # must print "not allowed"
+# Matched by SHAPE, not just by subcommand. sudoers takes glob patterns, so a MAC
+# address can be pinned exactly: [0-9A-Fa-f] is one hex digit, and the colons are
+# escaped because sudoers treats ':' as special inside a command line.
 #
-#   You may not need this at all: blueman + the polkit agent handle pairing and
-#   reconnecting without sudo. Prefer that route where it works.
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm show *
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm release *
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind *
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind * *
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind * * *
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm connect *
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm connect * *
-fred ALL=(root) NOPASSWD: /usr/bin/rfcomm connect * * *
+# Why this precision is necessary: `rfcomm listen` and `rfcomm watch` take a
+# command and RUN IT AS ROOT on connection. An unrestricted /usr/bin/rfcomm entry
+# is therefore a passwordless root shell wearing a Bluetooth costume.
+#
+# And note what that means for ordering: sudoers rules only ever GRANT. A narrow
+# rule cannot override a broad one — only an explicit '!' negation can. So these
+# lines are worth nothing while any unrestricted /usr/bin/rfcomm rule exists
+# anywhere in /etc/sudoers or /etc/sudoers.d. Verify with:
+#
+#     sudo -l | grep rfcomm            # should show ONLY these shapes
+#     sudo rfcomm listen 0 1 /bin/sh   # must be refused, not merely fail
+#
+# The second check matters: "Can't bind RFCOMM socket" means it RAN and the
+# socket was busy — that is permission granted, not permission denied.
+#
+#   rfcomm bind <dev> <MAC> [channel]     create /dev/rfcommN
+#   rfcomm release <dev>                  tear it down
+#   rfcomm show <dev>                     inspect
+#
+# listen, watch and connect are deliberately absent.
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind [0-9] [0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind [0-9] [0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f] [0-9]
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind [0-9] [0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f]\:[0-9A-Fa-f][0-9A-Fa-f] [0-9][0-9]
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm release [0-9]
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm show [0-9]
 
 # ── POWER MEASUREMENT: prefer a udev rule over sudo ───────────────────
 # turbostat is NOT listed. `turbostat -- <cmd>` runs <cmd> as root, so it cannot
