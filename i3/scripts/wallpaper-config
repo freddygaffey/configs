@@ -301,6 +301,17 @@ class Handler(BaseHTTPRequestHandler):
             sidecar_for(image).write_text(json.dumps(data, indent=2) + "\n")
             self._json({"ok": True, "sidecar": str(sidecar_for(image))})
 
+        elif url.path == "/api/exclude":
+            # Top-level, not per-display: an image you do not want is not wanted
+            # on any screen. The wallpaper script skips these in next/prev/random.
+            data = load_sidecar(image)
+            if payload.get("exclude"):
+                data["exclude"] = True
+            else:
+                data.pop("exclude", None)
+            sidecar_for(image).write_text(json.dumps(data, indent=2) + "\n")
+            self._json({"ok": True, "exclude": bool(data.get("exclude"))})
+
         elif url.path == "/api/apply":
             try:
                 subprocess.run([str(SCRIPT_DIR / "wallpaper"), "set", str(image)],
@@ -334,6 +345,7 @@ PAGE = r"""<!doctype html>
   #list div:hover { background:var(--panel); }
   #list div.sel { background:var(--panel); border-left-color:var(--accent); }
   #list div.has { color:var(--ok); }
+  #list div.ex { text-decoration:line-through; opacity:.45; }
 
   main { flex:1; display:flex; flex-direction:column; min-width:0; }
   .bar { display:flex; gap:8px; align-items:center; padding:8px 12px;
@@ -387,6 +399,7 @@ PAGE = r"""<!doctype html>
       <label>scale</label><span id="zoomVal">100%</span>
     </span>
     <button id="reset">reset</button>
+    <button id="exclude">exclude <kbd>x</kbd></button>
     <button id="clear">clear</button>
     <button id="apply">apply</button>
     <button id="next" class="primary">save + next &nbsp;<kbd>space</kbd></button>
@@ -396,7 +409,7 @@ PAGE = r"""<!doctype html>
     <div id="frame">
       <img id="img" alt="">
       <div id="tile" class="hide"></div>
-      <div id="hint">drag to pan · scroll to zoom · <kbd>space</kbd> save+next · <kbd>0</kbd> reset</div>
+      <div id="hint">drag/scroll to frame · <kbd>1</kbd>-<kbd>6</kbd> fit · <kbd>x</kbd> exclude · <kbd>space</kbd> save+next</div>
     </div>
   </div>
 
@@ -603,6 +616,7 @@ function viewFromCrop(e) {
 function loadEntry() {
   const entry = (cfg.displays || {})[$("#display").value];
   $("#fit").value = entry?.fit || "max";
+  $("#list").children[idx].classList.toggle("ex", !!cfg.exclude);
   $("#zoomVal").dataset.zoom = entry?.zoom ?? 1;
   onFit();
   if (entry?.fit === "crop") viewFromCrop(entry);
@@ -645,6 +659,17 @@ async function save() {
   return true;
 }
 
+async function toggleExclude() {
+  const now = !cfg.exclude;
+  const r = await (await fetch("/api/exclude", {method:"POST", body: JSON.stringify(
+    {path: image.path, exclude: now})})).json();
+  if (r.error) { msg("error: " + r.error); return; }
+  cfg.exclude = now;
+  $("#list").children[idx].classList.toggle("ex", now);
+  msg(now ? `excluded ${image.name} — wallpaper will skip it`
+          : `included ${image.name}`);
+}
+
 async function apply() {
   if (!await save()) return;
   msg("applying…");
@@ -655,8 +680,16 @@ async function apply() {
 
 // ----- pan and zoom --------------------------------------------------------
 let drag = null;
+function ensureCrop() {
+  // Dragging or scrolling means you want to adjust the framing, so switch into
+  // the mode that can. Keeps the current view, so it starts from what you see.
+  if ($("#fit").value === "crop") return;
+  $("#fit").value = "crop";
+  onFit();
+}
+
 $("#frame").addEventListener("pointerdown", e => {
-  if ($("#fit").value !== "crop") return;
+  ensureCrop();
   drag = {x: e.clientX, y: e.clientY, ox, oy};
   $("#frame").classList.add("grabbing");
   $("#frame").setPointerCapture(e.pointerId);
@@ -683,7 +716,7 @@ $("#frame").addEventListener("wheel", e => {
     renderFit();
     return;
   }
-  if (fit !== "crop") return;
+  if (fit !== "crop") ensureCrop();
   const next = Math.min(Math.max(scale * factor, coverScale()), nativeScale() * 8);
   // Keep the pixel under the cursor fixed, or zooming in on a detail walks it
   // off screen and you chase it with the mouse.
@@ -702,6 +735,11 @@ addEventListener("keydown", async e => {
     case "Enter": e.preventDefault(); apply(); return;
     case "0": resetView(); return;
   }
+  // Number keys pick the fit, in dropdown order. Faster than reaching for the
+  // select when you are working through a folder.
+  const byNum = {"1":"crop", "2":"fill", "3":"max", "4":"stretch", "5":"center", "6":"tile"};
+  if (byNum[e.key]) { $("#fit").value = byNum[e.key]; onFit(); msg("fit: " + byNum[e.key]); return; }
+  if (e.key === "x") { toggleExclude(); return; }
   if (e.key === "]" || e.key === "n") { pick(idx + 1); return; }
   if (e.key === "[" || e.key === "p") { pick(idx - 1); return; }
   if ($("#fit").value !== "crop") return;
@@ -715,6 +753,7 @@ $("#fit").onchange = onFit;
 $("#reset").onclick = resetView;
 $("#apply").onclick = apply;
 $("#next").onclick = async () => { if (await save()) pick(idx + 1); };
+$("#exclude").onclick = toggleExclude;
 $("#clear").onclick = async () => {
   await fetch("/api/save", {method:"POST", body: JSON.stringify(
     {path: image.path, display: $("#display").value, entry: null})});

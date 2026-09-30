@@ -74,7 +74,22 @@ list() {
            -o -iname '*.webp' -o -iname '*.bmp' \
            -o -iname '*.heic' -o -iname '*.heif' \
            -o -iname '*.avif' -o -iname '*.tif' -o -iname '*.tiff' \) \
-        2>/dev/null | sort
+        2>/dev/null | sort | exclude_filter
+}
+
+# Drop images marked "exclude": true in their sidecar, so next/prev/random skip
+# them. Kept in the folder rather than deleted — the point is to pass over a
+# photo without having to move it somewhere else.
+#
+# grep rather than jq per file: this runs on every next/prev, and only images
+# that actually have a sidecar are ever read.
+exclude_filter() {
+    while IFS= read -r f; do
+        if [ -r "$f.json" ] && grep -q '"exclude"[[:space:]]*:[[:space:]]*true' "$f.json" 2>/dev/null; then
+            continue
+        fi
+        printf '%s\n' "$f"
+    done
 }
 
 # No images: flat fill from the active palette, so the desktop still matches.
