@@ -190,8 +190,10 @@ bindsym $mod+n      exec --no-startup-id ~/.config/i3/scripts/wifi-menu
 
 # Wallpaper: next / random. Images live in ~/Pictures/Wallpapers/{dark,light},
 # and which directory is used follows the UI mode.
-bindsym $mod+Shift+w exec --no-startup-id ~/.config/i3/scripts/wallpaper next
-bindsym $mod+Ctrl+w  exec --no-startup-id ~/.config/i3/scripts/wallpaper random
+# i for image, not w for wallpaper: $mod+w is already the tabbed layout, and
+# hanging an unrelated meaning off the same letter is how bindings get forgotten.
+bindsym $mod+Shift+i exec --no-startup-id ~/.config/i3/scripts/wallpaper next
+bindsym $mod+Ctrl+i  exec --no-startup-id ~/.config/i3/scripts/wallpaper random
 bindsym $mod+Tab exec --no-startup-id rofi -show window
 
 # Focus

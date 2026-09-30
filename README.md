@@ -227,8 +227,8 @@ sits behind.
 
 | | |
 |---|---|
-| `Super+Shift+w` | next wallpaper |
-| `Super+Ctrl+w` | random |
+| `Super+Shift+i` | next wallpaper |
+| `Super+Ctrl+i` | random |
 | systemd user timer | every 30 min — `systemctl --user enable --now wallpaper.timer` |
 
 With no images present it falls back to a flat fill of the palette's background,
