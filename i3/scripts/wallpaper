@@ -98,6 +98,78 @@ fallback() {
 # Set WALLPAPER_FIT=fill if you would rather have no letterboxing.
 FIT="${WALLPAPER_FIT:-max}"
 
+# Resolution of the primary display, e.g. "2560x1600". This is the key that
+# per-image framing is stored under, so the same photo can be cropped one way
+# for the laptop panel and another for an ultrawide.
+display_size() {
+    xrandr --listmonitors 2>/dev/null | awk '/\*/ {
+        split($3, a, "/"); w = a[1]
+        split($3, b, "x"); split(b[2], c, "/"); h = c[1]
+        print w "x" h; exit
+    }'
+}
+
+# If the image has a sidecar with a crop for this display, render exactly that
+# region at exactly the screen resolution and print the cached path. Print
+# nothing if there is no sidecar, no entry, or the tools are missing — callers
+# fall back to plain feh fitting.
+#
+# feh cannot do this itself: --bg-max and --bg-fill choose the framing for you,
+# and neither can be told "use this rectangle". So the crop is composited with
+# ImageMagick and feh is handed a file that already matches the screen exactly.
+#
+# Results are cached, keyed by image + mtime + display + rectangle. Cropping a
+# 7000px original takes a second or so, which would otherwise be paid on every
+# `next`, every mode switch and every i3 restart.
+crop_for_display() {
+    image="$1"
+    sidecar="$image.json"
+    [ -r "$sidecar" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    command -v convert >/dev/null 2>&1 || return 0
+
+    disp=$(display_size)
+    [ -n "$disp" ] || return 0
+
+    entry=$(jq -r --arg d "$disp" '
+        .displays[$d] // empty
+        | select(.fit == "crop")
+        | "\(.x) \(.y) \(.w) \(.h)"' "$sidecar" 2>/dev/null)
+    [ -n "$entry" ] || return 0
+
+    mtime=$(stat -c %Y "$image" 2>/dev/null || echo 0)
+    key=$(printf '%s %s %s %s' "$image" "$mtime" "$disp" "$entry" | sha1sum | cut -c1-16)
+    cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/i3-wallpaper"
+    out="$cache_dir/$key.png"
+    [ -r "$out" ] && { printf '%s' "$out"; return 0; }
+    mkdir -p "$cache_dir"
+
+    # [0] so a multi-frame file (animated webp, multi-page tiff) uses one frame
+    # rather than emitting a numbered file per frame.
+    dims=$(identify -format '%w %h' "$image[0]" 2>/dev/null) || return 0
+    iw=${dims% *}; ih=${dims#* }
+    dw=${disp%x*}; dh=${disp#*x}
+
+    # Fractions -> pixels. awk because sh arithmetic is integer only.
+    geom=$(awk -v iw="$iw" -v ih="$ih" -v e="$entry" 'BEGIN {
+        split(e, f, " ")
+        cw = int(f[3] * iw); ch = int(f[4] * ih)
+        cx = int(f[1] * iw); cy = int(f[2] * ih)
+        if (cw < 1) cw = 1; if (ch < 1) ch = 1
+        printf "%dx%d+%d+%d", cw, ch, cx, cy
+    }')
+
+    # -resize ^ then -extent: fill the screen and trim any half-pixel remainder,
+    # so the output is exactly dw x dh and feh never rescales it.
+    if convert "$image[0]" -crop "$geom" +repage \
+               -resize "${dw}x${dh}^" -gravity center -extent "${dw}x${dh}" \
+               "$out" 2>/dev/null; then
+        printf '%s' "$out"
+    else
+        rm -f "$out"
+    fi
+}
+
 apply() {
     image="$1"
     if [ -r "$image" ] && command -v feh >/dev/null 2>&1; then
@@ -105,6 +177,15 @@ apply() {
             fill) mode=--bg-fill ;;
             *)    mode=--bg-max  ;;
         esac
+
+        # Per-display framing wins when configured. The rendered file is already
+        # exactly screen-sized, so --bg-center places it 1:1 with no rescaling.
+        rendered=$(crop_for_display "$image" 2>/dev/null || true)
+        if [ -n "$rendered" ] && [ -r "$rendered" ]; then
+            feh --no-fehbg --bg-center "$rendered" >/dev/null 2>&1 \
+                && printf '%s\n' "$image" > "$STATE"
+            return 0
+        fi
         # --image-bg sets the letterbox colour, so the bars match the theme
         # instead of defaulting to black.
         theme=$( [ "$(mode)" = fly ] && echo dayfox || \
