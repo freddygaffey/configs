@@ -374,6 +374,12 @@ PAGE = r"""<!doctype html>
             display:flex; gap:16px; }
   #count { color:var(--ok); }
   .hide { display:none !important; }
+  .modes { gap:4px; padding-top:6px; padding-bottom:6px; }
+  .mode { display:flex; align-items:center; gap:6px; }
+  .mode b { font-weight:normal; color:var(--mut); border:1px solid var(--line);
+            border-radius:3px; padding:0 5px; font-size:11px; }
+  .mode.on { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+  .mode.on b { color:var(--bg); border-color:rgba(0,0,0,.3); }
   kbd { background:var(--panel); border:1px solid var(--line); border-radius:3px;
         padding:0 4px; color:var(--fg); }
 </style>
@@ -386,15 +392,6 @@ PAGE = r"""<!doctype html>
 <main>
   <div class="bar">
     <label>display</label><select id="display"></select>
-    <label>fit</label>
-    <select id="fit">
-      <option value="crop">Crop — pan &amp; zoom</option>
-      <option value="fill">Fill Screen</option>
-      <option value="max">Fit to Screen</option>
-      <option value="stretch">Stretch to Fill</option>
-      <option value="center">Center</option>
-      <option value="tile">Tile</option>
-    </select>
     <span id="zoomWrap" class="hide">
       <label>scale</label><span id="zoomVal">100%</span>
     </span>
@@ -403,6 +400,19 @@ PAGE = r"""<!doctype html>
     <button id="clear">clear</button>
     <button id="apply">apply</button>
     <button id="next" class="primary">save + next &nbsp;<kbd>space</kbd></button>
+  </div>
+
+  <div class="bar modes">
+    <button class="mode" data-fit="crop"><b>1</b> Crop</button>
+    <button class="mode" data-fit="fill"><b>2</b> Fill Screen</button>
+    <button class="mode" data-fit="max"><b>3</b> Fit to Screen</button>
+    <button class="mode" data-fit="stretch"><b>4</b> Stretch to Fill</button>
+    <button class="mode" data-fit="center"><b>5</b> Center</button>
+    <button class="mode" data-fit="tile"><b>6</b> Tile</button>
+    <!-- The selected fit has to be visible: with only a keyboard shortcut you
+         cannot tell which mode you are in, and several modes look alike on a
+         photo that happens to nearly fill the frame. -->
+    <input type="hidden" id="fit" value="max">
   </div>
 
   <div id="stageWrap">
@@ -615,7 +625,7 @@ function viewFromCrop(e) {
 
 function loadEntry() {
   const entry = (cfg.displays || {})[$("#display").value];
-  $("#fit").value = entry?.fit || "max";
+  $("#fit").value = entry?.fit || "max";   // onFit() below repaints the bar
   $("#list").children[idx].classList.toggle("ex", !!cfg.exclude);
   $("#zoomVal").dataset.zoom = entry?.zoom ?? 1;
   onFit();
@@ -623,8 +633,15 @@ function loadEntry() {
   msg(entry ? `${image.name} — saved ${entry.fit}` : `${image.name} — unset`);
 }
 
+function setFit(fit) {
+  $("#fit").value = fit;
+  onFit();
+}
+
 function onFit() {
   const fit = $("#fit").value;
+  document.querySelectorAll(".mode").forEach(b =>
+    b.classList.toggle("on", b.dataset.fit === fit));
   const isCrop = fit === "crop";
   const hasZoom = fit === "tile" || fit === "center";
   $("#img").classList.toggle("hide", fit === "tile");
@@ -684,8 +701,7 @@ function ensureCrop() {
   // Dragging or scrolling means you want to adjust the framing, so switch into
   // the mode that can. Keeps the current view, so it starts from what you see.
   if ($("#fit").value === "crop") return;
-  $("#fit").value = "crop";
-  onFit();
+  setFit("crop");
 }
 
 $("#frame").addEventListener("pointerdown", e => {
@@ -728,20 +744,22 @@ $("#frame").addEventListener("wheel", e => {
 
 // ----- keyboard: the whole point, with ~70 images to get through ------------
 addEventListener("keydown", async e => {
-  if (e.target.tagName === "SELECT") return;
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
   const step = e.shiftKey ? 60 : 15;
   switch (e.key) {
     case " ":  e.preventDefault(); if (await save()) pick(idx + 1); return;
     case "Enter": e.preventDefault(); apply(); return;
-    case "0": resetView(); return;
+    case "0": e.preventDefault(); resetView(); return;
   }
   // Number keys pick the fit, in dropdown order. Faster than reaching for the
   // select when you are working through a folder.
+  // preventDefault on everything handled here: without it Firefox's type-ahead
+  // find swallows the number keys and opens its quick-find bar instead.
   const byNum = {"1":"crop", "2":"fill", "3":"max", "4":"stretch", "5":"center", "6":"tile"};
-  if (byNum[e.key]) { $("#fit").value = byNum[e.key]; onFit(); msg("fit: " + byNum[e.key]); return; }
-  if (e.key === "x") { toggleExclude(); return; }
-  if (e.key === "]" || e.key === "n") { pick(idx + 1); return; }
-  if (e.key === "[" || e.key === "p") { pick(idx - 1); return; }
+  if (byNum[e.key]) { e.preventDefault(); setFit(byNum[e.key]); msg("fit: " + byNum[e.key]); return; }
+  if (e.key === "x") { e.preventDefault(); toggleExclude(); return; }
+  if (e.key === "]" || e.key === "n") { e.preventDefault(); pick(idx + 1); return; }
+  if (e.key === "[" || e.key === "p") { e.preventDefault(); pick(idx - 1); return; }
   if ($("#fit").value !== "crop") return;
   const moves = {ArrowLeft:[step,0], ArrowRight:[-step,0], ArrowUp:[0,step], ArrowDown:[0,-step]};
   const m = moves[e.key];
@@ -749,7 +767,8 @@ addEventListener("keydown", async e => {
 });
 
 $("#display").onchange = async () => { sizeFrame(); await refreshMarks(); loadEntry(); };
-$("#fit").onchange = onFit;
+document.querySelectorAll(".mode").forEach(b =>
+  b.onclick = () => { setFit(b.dataset.fit); msg("fit: " + b.dataset.fit); });
 $("#reset").onclick = resetView;
 $("#apply").onclick = apply;
 $("#next").onclick = async () => { if (await save()) pick(idx + 1); };
