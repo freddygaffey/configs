@@ -101,6 +101,14 @@ exec_always --no-startup-id ~/.config/i3/scripts/input-setup
 # Match the panel refresh rate to the power source, and keep matching it.
 exec_always --no-startup-id ~/.config/i3/scripts/refresh-rate-daemon
 
+# Re-apply the wallpaper. i3 does not own the root window's contents, so a
+# restart leaves whatever was there — which is fine, except after a mode switch.
+exec_always --no-startup-id ~/.config/i3/scripts/wallpaper reapply
+
+# Let the systemd user manager see DISPLAY, so the wallpaper timer (and anything
+# else started as a user unit) can talk to X. Without this feh has no display.
+exec_always --no-startup-id systemctl --user import-environment DISPLAY XAUTHORITY
+
 # Lyrebird's dictation daemon, holding the Whisper model in memory so F9 is
 # instant. `exec` not `exec_always`: reloading i3 should not restart it and throw
 # away a model that took seconds to load.
@@ -158,6 +166,11 @@ bindsym $mod+Shift+b exec --no-startup-id firefox
 
 # Bluetooth — see the blueman note above for why it is not in the tray.
 bindsym $mod+Ctrl+b exec --no-startup-id blueman-manager
+
+# Wallpaper: next / random. Images live in ~/Pictures/Wallpapers/{dark,light},
+# and which directory is used follows the UI mode.
+bindsym $mod+Shift+w exec --no-startup-id ~/.config/i3/scripts/wallpaper next
+bindsym $mod+Ctrl+w  exec --no-startup-id ~/.config/i3/scripts/wallpaper random
 bindsym $mod+Tab exec --no-startup-id rofi -show window
 
 # Focus

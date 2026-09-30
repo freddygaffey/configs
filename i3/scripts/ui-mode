@@ -133,18 +133,12 @@ apply_nvim() {
 }
 
 apply_background() {
-    # An image if the palette names one, otherwise a plain fill of its bg. A
-    # tiling WM shows very little root window, so a flat colour that matches the
-    # theme is usually the honest choice — and it can never clash.
-    wallpaper=$(palette_value "$1" wallpaper)
-    if [ -n "$wallpaper" ]; then
-        wallpaper=$(eval echo "$wallpaper")     # expand a leading ~
-        if [ -r "$wallpaper" ] && command -v feh >/dev/null 2>&1; then
-            feh --no-fehbg --bg-fill "$wallpaper" >/dev/null 2>&1 && return 0
-        fi
-    fi
-    command -v xsetroot >/dev/null 2>&1 || return 0
-    xsetroot -solid "$(palette_value "$1" bg)" >/dev/null 2>&1 || true
+    # Delegated: i3/scripts/wallpaper owns image selection, including the
+    # per-mode directory and the flat-colour fallback when there are no images.
+    # "reapply" keeps the current image if it belongs to the new mode's
+    # directory, and moves to one that does if it does not.
+    script="$HOME/.config/i3/scripts/wallpaper"
+    [ -x "$script" ] && "$script" reapply >/dev/null 2>&1 || true
 }
 
 
@@ -208,7 +202,7 @@ i3_changed=${render_out##* }
 apply_gtk "$gtk_theme" "$colour_scheme"
 apply_kitty
 apply_nvim "${nvim_theme:-$theme}"
-apply_background "$palette"
+apply_background
 apply_dunst
 
 # Written before the i3 restart: the restart replaces this process's parent, so

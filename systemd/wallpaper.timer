@@ -1,0 +1,12 @@
+[Unit]
+Description=Rotate the desktop wallpaper periodically
+
+[Timer]
+# First rotation shortly after login, then every 30 minutes.
+OnStartupSec=2min
+OnUnitActiveSec=30min
+# Don't fire a backlog of missed rotations after the machine has been asleep.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,131 @@
+#!/usr/bin/env sh
+# Desktop wallpaper, chosen from a directory that follows the UI mode.
+#
+#   wallpaper next        advance to the next image
+#   wallpaper prev        go back
+#   wallpaper random      pick one at random
+#   wallpaper reapply     re-set the current one (after an i3 restart)
+#   wallpaper set <file>  use a specific image
+#   wallpaper status      print the current image
+#
+# Images live in <wallpaper dir>/dark/ and <wallpaper dir>/light/. The directory
+# is the first of these that exists, so it works wherever you keep them:
+#
+#   $WALLPAPER_DIR                  if set
+#   ~/.local/share/wallpapers       default — XDG data, no new visible dir in $HOME
+#   ~/Pictures/Wallpapers           if you prefer that
+#
+# Deliberately NOT in this git repo. git keeps every version of a binary forever,
+# so a handful of photos become permanent weight on every clone — including the
+# `curl | bash` path onto small servers that will never show a wallpaper — and
+# the repo is public, which would publish them too.
+#
+# Which directory is used follows the UI mode rather than the palette, because
+# what matters for a wallpaper is what it sits behind: "light" mode has a dark
+# terminal but light apps, so it wants the light set.
+#
+# With no images present, falls back to a flat fill of the palette's background —
+# a tiling WM shows very little root window, so that is a perfectly good default
+# and means this never has to be "set up" before i3 is usable.
+
+set -eu
+
+REPO="${UI_MODE_REPO:-$HOME/.dotfiles/configs}"
+resolve_dir() {
+    [ -n "${WALLPAPER_DIR:-}" ] && { printf '%s' "$WALLPAPER_DIR"; return; }
+    for candidate in "$HOME/.local/share/wallpapers" "$HOME/Pictures/Wallpapers"; do
+        [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
+    done
+    # Nothing exists yet: name the default so `status` can tell you where to put
+    # images, and so mkdir has somewhere to go if you add some.
+    printf '%s' "$HOME/.local/share/wallpapers"
+}
+WALLPAPER_DIR=$(resolve_dir)
+STATE="$HOME/.local/state/i3-wallpaper"
+
+mkdir -p "$(dirname "$STATE")"
+
+mode() { [ -r "$HOME/.config/ui-mode" ] && cat "$HOME/.config/ui-mode" || echo dark; }
+
+# dark mode -> dark/, everything else -> light/
+set_dir() {
+    case "$(mode)" in
+        dark) echo "$WALLPAPER_DIR/dark" ;;
+        *)    echo "$WALLPAPER_DIR/light" ;;
+    esac
+}
+
+# Sorted so "next" and "prev" are stable between runs.
+list() {
+    dir=$(set_dir)
+    [ -d "$dir" ] || return 0
+    find "$dir" -maxdepth 1 -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+           -o -iname '*.webp' -o -iname '*.bmp' \) 2>/dev/null | sort
+}
+
+# No images: flat fill from the active palette, so the desktop still matches.
+fallback() {
+    theme=$( [ "$(mode)" = fly ] && echo dayfox || echo carbonfox )
+    bg=$(sed -n 's/^bg=//p' "$REPO/themes/$theme.env" 2>/dev/null | head -1)
+    [ -n "$bg" ] && command -v xsetroot >/dev/null 2>&1 \
+        && xsetroot -solid "$bg" >/dev/null 2>&1 || true
+}
+
+apply() {
+    image="$1"
+    if [ -r "$image" ] && command -v feh >/dev/null 2>&1; then
+        # --no-fehbg: feh would otherwise write ~/.fehbg, which competes with
+        # this script's own state file for "what is the current wallpaper".
+        feh --no-fehbg --bg-fill "$image" >/dev/null 2>&1 && printf '%s\n' "$image" > "$STATE"
+    else
+        fallback
+    fi
+}
+
+current() { [ -r "$STATE" ] && cat "$STATE" || echo ""; }
+
+# Index of the current image in the list, or 0 if it is not in there (which
+# happens after a mode switch, since the directory changes).
+index_of() {
+    target="$1"; i=0
+    list | while IFS= read -r f; do
+        i=$((i + 1))
+        [ "$f" = "$target" ] && { echo "$i"; return 0; }
+    done
+    echo 0
+}
+
+step() {
+    direction="$1"
+    count=$(list | wc -l)
+    [ "$count" -gt 0 ] || { fallback; exit 0; }
+
+    idx=$(index_of "$(current)")
+    if [ "$direction" = next ]; then
+        idx=$((idx + 1)); [ "$idx" -gt "$count" ] && idx=1
+    else
+        idx=$((idx - 1)); [ "$idx" -lt 1 ] && idx="$count"
+    fi
+    apply "$(list | sed -n "${idx}p")"
+}
+
+case "${1:-next}" in
+    next) step next ;;
+    prev) step prev ;;
+    random)
+        count=$(list | wc -l)
+        [ "$count" -gt 0 ] || { fallback; exit 0; }
+        pick=$(( (($(od -An -N2 -tu2 /dev/urandom | tr -d ' ')) % count) + 1 ))
+        apply "$(list | sed -n "${pick}p")"
+        ;;
+    reapply)
+        cur=$(current)
+        # After a mode switch the stored image may be in the other directory.
+        if [ -n "$cur" ] && list | grep -qxF "$cur"; then apply "$cur"; else step next; fi
+        ;;
+    set)  [ $# -ge 2 ] || { echo "usage: wallpaper set <file>" >&2; exit 1; }; apply "$2" ;;
+    status) printf 'mode=%s dir=%s count=%s current=%s\n' \
+              "$(mode)" "$(set_dir)" "$(list | wc -l)" "$(current)" ;;
+    *) echo "usage: wallpaper next|prev|random|reapply|set <file>|status" >&2; exit 1 ;;
+esac

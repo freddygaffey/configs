@@ -1,0 +1,10 @@
+[Unit]
+Description=Rotate the desktop wallpaper
+Documentation=https://github.com/freddygaffey/configs
+
+[Service]
+Type=oneshot
+# DISPLAY is not in the user manager's environment by default, so feh would have
+# no X server to talk to. i3 pushes it in at startup via `systemctl --user
+# import-environment`, which bootstrap-desktop.sh wires up.
+ExecStart=%h/.config/i3/scripts/wallpaper next

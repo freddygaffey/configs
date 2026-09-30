@@ -171,6 +171,14 @@ link "$DOTFILES/i3/scripts"        "$HOME/.config/i3/scripts"
 link "$DOTFILES/ghostty/config"    "$HOME/.config/ghostty/config"
 link "$DOTFILES/xresources"        "$HOME/.Xresources"
 link "$DOTFILES/kitty/kitty.conf" "$HOME/.config/kitty/kitty.conf"
+mkdir -p "$HOME/.config/systemd/user"
+link "$DOTFILES/systemd/wallpaper.service" "$HOME/.config/systemd/user/wallpaper.service"
+link "$DOTFILES/systemd/wallpaper.timer"   "$HOME/.config/systemd/user/wallpaper.timer"
+# Wallpaper directories, so `wallpaper status` has somewhere to point at. The
+# timer is NOT enabled here — rotation is opt-in:
+#   systemctl --user enable --now wallpaper.timer
+mkdir -p "$HOME/.local/share/wallpapers/dark" "$HOME/.local/share/wallpapers/light"
+systemctl --user daemon-reload 2>/dev/null || true
 
 chmod +x "$DOTFILES"/i3/scripts/* 2>/dev/null || true
 

@@ -217,11 +217,27 @@ terminals, `:colorscheme` pushed to running nvim over its RPC socket, dunst
 killed so D-Bus activation restarts it, and `i3-msg restart` (which keeps your
 layout).
 
-### Desktop background
+### Wallpaper
 
-Each palette can set `wallpaper=/path/to/image.png`. Left unset, the root window
-is filled with the palette's `bg` — a tiling WM shows very little of it, and a
-flat colour that comes from the palette can never clash.
+Images go in `dark/` and `light/` under the first of these that exists:
+`$WALLPAPER_DIR`, `~/.local/share/wallpapers` (the default), or
+`~/Pictures/Wallpapers`. Which set is used follows the UI mode — `dark` mode uses
+`dark/`, `light` and `fly` use `light/`, since what matters is what the wallpaper
+sits behind.
+
+| | |
+|---|---|
+| `Super+Shift+w` | next wallpaper |
+| `Super+Ctrl+w` | random |
+| systemd user timer | every 30 min — `systemctl --user enable --now wallpaper.timer` |
+
+With no images present it falls back to a flat fill of the palette's background,
+so this never needs setting up before i3 is usable.
+
+**Not stored in this repo, deliberately.** git keeps every version of a binary
+forever, so a few photos become permanent weight on every clone — including the
+`curl | bash` path onto small servers that will never show a wallpaper — and this
+repo is public.
 
 ### Browsers following the mode
 
