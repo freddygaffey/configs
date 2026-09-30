@@ -172,6 +172,7 @@ Bindings not on the card:
 
 | Key | Action |
 |---|---|
+| `Super+Shift+/` | open this reference card (`man i3` offline) |
 | `Super+Tab` | window switcher (rofi) |
 | `Super+p` | cycle power profile |
 | `Super+Ctrl+q` | lock |

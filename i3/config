@@ -269,6 +269,13 @@ bindsym XF86Calculator exec --no-startup-id gnome-calculator
 bindsym F9 exec --no-startup-id sh -c 'cd "$HOME/lyrebird" && ./.venv/bin/python src/dictate.py --toggle'
 
 # ── Session ────────────────────────────────────────────────────────────
+# Help. i3 has no built-in help key, and Debian strips its HTML docs, so this
+# opens the upstream reference card — which is the cheat sheet, rather than a
+# hand-maintained list here that would drift from the actual bindings.
+# Read it with two substitutions: Super for the modifier, hjkl for jkl;.
+# Offline: `man i3`.
+bindsym $mod+Shift+slash exec --no-startup-id xdg-open https://i3wm.org/docs/refcard.html
+
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+r restart
 bindsym $mod+Ctrl+q exec --no-startup-id $lock
