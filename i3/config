@@ -243,9 +243,15 @@ bindsym XF86AudioMicMute      exec --no-startup-id pactl set-source-mute @DEFAUL
 bindsym XF86Launch1 exec --no-startup-id ~/.config/i3/scripts/cycle-power-profile
 bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profile
 
-# Screenshots — flameshot, on the key with the screenshot icon (Print).
-#   Print        whole screen straight to the clipboard
-#   Shift+Print  drag a region, with annotation tools, then copy or save
+# Screenshots — flameshot, on the Print key (next to Delete).
+#   Print              whole screen, straight to the clipboard, no prompting
+#   Shift+Print        drag a region with the annotation toolbar, then copy or
+#                      save from it — the macOS Cmd+Shift+4 equivalent
+#   Ctrl+Shift+Print   whole screen, with a Save dialog
+#
+# saveAfterCopy=true in flameshot.ini means the two clipboard paths also drop a
+# file in ~/Pictures/Screenshots, so nothing is lost if the clipboard is
+# overwritten before you paste.
 #
 # Under GNOME this key is grabbed by GNOME's own screenshot UI (which is why it
 # never shows up in xev there). i3 sets no such grab, so it reaches these.
@@ -270,8 +276,9 @@ bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profil
 # Working set of keys: savePath, savePathFixed, saveAfterCopy, filenamePattern,
 # showHelp, showDesktopNotification, showMagnifier, disabledTrayIcon, uiColor,
 # contrastUiColor, drawColor.
-bindsym Print       exec --no-startup-id flameshot full -c
-bindsym Shift+Print exec --no-startup-id flameshot gui
+bindsym Print            exec --no-startup-id flameshot full -c
+bindsym Shift+Print      exec --no-startup-id flameshot gui
+bindsym Ctrl+Shift+Print exec --no-startup-id flameshot full
 
 # Calculator. gnome-calculator ships with Ubuntu and does unit/base conversion,
 # which is most of what this key ever gets used for.
