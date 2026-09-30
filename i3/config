@@ -161,7 +161,12 @@ gaps outer 0
 # A little air under the bar, so windows do not butt straight up against it.
 gaps top 2
 smart_gaps on
-default_border pixel 2
+# 4px, not 2. The border IS the mouse resize handle for tiling windows — i3 has
+# no other mouse resize for them (floating_modifier + right-drag is floating-only,
+# per i3's own docs). At 2px the target is essentially unhittable, which is why
+# dragging to resize felt like it did not exist. 4px is grabbable without being
+# obtrusive; raise it if it is still fiddly.
+default_border pixel 4
 # Wider than tiled windows on purpose: a floating window is resized by dragging
 # its edge, and a 2px target is fiddly with a trackpad. Tiled windows are resized
 # with the keyboard, so they do not need the extra pixels.
@@ -181,6 +186,11 @@ default_floating_border pixel 5
 # ── Window management ──────────────────────────────────────────────────
 # Super + left-drag moves a floating window, Super + right-drag resizes it —
 # from anywhere in the window, so you never have to hit the border at all.
+# Mouse gestures, since they are not discoverable:
+#   tiling    drag the BORDER between two windows to resize them
+#   floating  $mod + left-drag moves, $mod + right-drag resizes
+#             (hold Shift while right-dragging for a proportional resize)
+#   $mod + r  keyboard resize mode, which works on tiling windows too
 floating_modifier $mod
 
 # Tiled windows can also be dragged by their titlebar, or with Super held.
