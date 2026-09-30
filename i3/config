@@ -166,22 +166,20 @@ smart_gaps on
 # per i3's own docs). At 2px the target is essentially unhittable, which is why
 # dragging to resize felt like it did not exist. 4px is grabbable without being
 # obtrusive; raise it if it is still fiddly.
-default_border pixel 4
-
-# Force a border even on clients that ask for none. kitty sets
-# hide_window_decorations, which puts a Motif hint on the window, and i3 honours
-# it by drawing NO border — so the focused window had no blue edge while Firefox
-# did, and there was no way to tell which window had focus.
+# No borders. The wallpaper and the gaps carry the look, and a coloured frame
+# around every window fights the photograph behind it.
 #
-# A tiling WM has no titlebars, so the border IS the focus indicator. It is also
-# the only mouse resize handle. Both reasons to insist on it.
-for_window [class="kitty"] border pixel 4
-for_window [class="ghostty"] border pixel 4
-for_window [class="Alacritty"] border pixel 4
+# That costs two things, both deliberately traded away:
+#   focus    no border means no blue edge, so focus is shown by DIMMING the
+#            unfocused windows instead — see inactive-dim in picom.conf
+#   resize   the border was the only mouse resize handle for tiling windows.
+#            $mod+r (resize mode) is now the way, or float a window with
+#            $mod+Shift+space and $mod+right-drag it.
+default_border none
+default_floating_border none
 # Wider than tiled windows on purpose: a floating window is resized by dragging
 # its edge, and a 2px target is fiddly with a trackpad. Tiled windows are resized
 # with the keyboard, so they do not need the extra pixels.
-default_floating_border pixel 5
 
 # NB there is deliberately no `smart_borders` line. Off is the default, and the
 # option only accepts enabling values — `smart_borders off` is a parse error, not
