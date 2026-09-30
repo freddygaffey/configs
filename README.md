@@ -177,7 +177,7 @@ Bindings not on the card:
 | `Super+p` | cycle power profile |
 | `Super+Ctrl+q` | lock |
 | `Super+bar` / `Super+backslash` | split h / v (tmux-style aliases for `b` / `v`) |
-| `Print` | flameshot — whole screen to clipboard |
+| `Print` | flameshot — whole screen to clipboard and `~/Pictures/Screenshots` |
 | `Shift+Print` | flameshot — drag a region, annotate, copy or save |
 | `F9` | Lyrebird dictation, start/stop |
 | `F12` | calculator |

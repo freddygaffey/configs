@@ -257,6 +257,19 @@ bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profil
 # Save location, and remembering the last folder you picked, live in
 # ~/.config/flameshot/flameshot.ini — flameshot rewrites that file itself, so it
 # is deliberately not tracked in this repo.
+#
+# Two landmines in that file, found the hard way. flameshot 12.1 REFUSES TO RUN
+# if it sees a key it does not accept — it exits without capturing and prints
+# nothing but an unrelated Qt session-management warning:
+#     showSidePanel=true        breaks it
+#     saveAfterCopyPath=...     breaks it   (saveAfterCopy=true alone is fine,
+#                                            and saves into savePath)
+# It also exits 1 even when the capture succeeded, so never test it by exit code
+# — check for the file or the clipboard instead.
+#
+# Working set of keys: savePath, savePathFixed, saveAfterCopy, filenamePattern,
+# showHelp, showDesktopNotification, showMagnifier, disabledTrayIcon, uiColor,
+# contrastUiColor, drawColor.
 bindsym Print       exec --no-startup-id flameshot full -c
 bindsym Shift+Print exec --no-startup-id flameshot gui
 
