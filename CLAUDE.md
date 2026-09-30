@@ -36,6 +36,18 @@ path as root. Per-entry reasoning is in that file's header.
 
 Script output belongs in the docs, not the terminal.
 
+## Battery work is finished
+
+The power work in `system/` took the cheap wins — a udev rule for the AC/battery
+profile, letting the dGPU sleep, hardware video decode — and stops there. This is
+a 74.5Wh gaming laptop with an i9-14900HX and an RTX 4070; it was never going to
+be an all-day machine, and the remaining savings are small.
+
+So do not trade user experience for watts. Concretely: Lyrebird holds its model on
+the GPU and that keeps the dGPU awake for about 6W — that is accepted, because CPU
+inference is too slow for live dictation. Measure before proposing a power change,
+and if it costs latency or features, leave it alone.
+
 ## Validating changes
 
 There is no test suite. After editing a Lua config, check it parses and that plugins still resolve:
