@@ -34,6 +34,7 @@
 #            note in the README) — Firefox, Chrome and Electron follow it
 #   kitty    `kitty @ set-colors` repaints open windows
 #   nvim     :colorscheme pushed to every running instance over its RPC socket
+#   tmux     theme sourced into every running server
 #   dunst    killed; D-Bus activation restarts it on the next notification
 #   desktop  root window filled with the palette's bg, or an image if the
 #            palette names a wallpaper
@@ -142,6 +143,17 @@ apply_background() {
 }
 
 
+apply_tmux() {
+    # Live-apply to every running server. tmux.conf sources this file at startup,
+    # which covers new servers; this covers the one you are sitting in.
+    theme_file="$HOME/.config/tmux/theme.conf"
+    [ -r "$theme_file" ] || return 0
+    command -v tmux >/dev/null 2>&1 || return 0
+    tmux list-sessions >/dev/null 2>&1 || return 0
+    tmux source-file "$theme_file" >/dev/null 2>&1 || true
+}
+
+
 apply_dunst() {
     # dunst 1.9 has no reload command, but it is D-Bus activated: killing it
     # means the next notification starts a fresh one with the new config.
@@ -171,6 +183,7 @@ render_all() {
         && i3_changed=1
     render "$REPO/templates/kitty-theme.template" "$palette" "$HOME/.config/kitty/theme.conf" || true
     render "$REPO/templates/dunstrc.template"     "$palette" "$HOME/.config/dunst/dunstrc" || true
+    render "$REPO/templates/tmux-theme.template"  "$palette" "$HOME/.config/tmux/theme.conf" || true
     # Both values on one line: this runs in a command substitution, so the
     # caller reads them back rather than seeing any variable we set.
     printf '%s %s\n' "$(palette_value "$palette" name)" "$i3_changed"
@@ -203,6 +216,7 @@ apply_gtk "$gtk_theme" "$colour_scheme"
 apply_kitty
 apply_nvim "${nvim_theme:-$theme}"
 apply_background
+apply_tmux
 apply_dunst
 
 # Written before the i3 restart: the restart replaces this process's parent, so

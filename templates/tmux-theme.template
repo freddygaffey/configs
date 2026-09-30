@@ -1,0 +1,16 @@
+# GENERATED — do not edit ~/.config/tmux/theme.conf by hand.
+# Rendered from templates/tmux-theme.template with a themes/*.env palette by
+# i3/scripts/ui-mode, and sourced by tmux.conf if present.
+#
+# tmux.conf keeps its own carbonfox baseline for machines with no ui-mode script
+# (the Mac, servers). This file overrides it when there is one.
+
+set -g status-style "bg=@panel@,fg=@fg@"
+set -g status-left "#[bg=@accent@,fg=@bg@,bold] #S #[bg=@panel@]"
+set -g status-right "#{?client_prefix,#[fg=@urgent@]PREFIX ,}#[fg=@accent@]%a %d %b #[fg=@accent@]%H:%M "
+setw -g window-status-format         "#[fg=@dim@] #I #W "
+setw -g window-status-current-format "#[bg=@bg@,fg=@accent@,bold] #I #W "
+set -g pane-border-style        "fg=@panel@"
+set -g pane-active-border-style "fg=@accent@"
+set -g message-style            "bg=@panel@,fg=@fg@"
+set -g mode-style               "bg=@accent@,fg=@bg@"
