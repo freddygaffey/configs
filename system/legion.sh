@@ -252,31 +252,21 @@ if [ "${SKIP_SUDOERS:-}" != "1" ]; then
   fi
 fi
 
-# ── 9. Make RAPL power counters readable ───────────────────────────────
-# /sys/class/powercap/intel-rapl:*/energy_uj is the package energy counter — the
-# only way to split draw into CPU vs iGPU vs rest, since BAT1/power_now gives
-# whole-system only. Ships 0400 root, which forces everything through turbostat
-# as root; turbostat can't be sudo-allowlisted because `turbostat -- <cmd>` runs
-# <cmd> as root.
+# ── RAPL power counters: deliberately NOT touched ──────────────────────
+# /sys/class/powercap/intel-rapl:*/energy_uj is the package energy counter, and
+# the only way to split draw into CPU vs iGPU vs rest (BAT1/power_now is
+# whole-system only). It ships 0400 root and stays that way.
 #
-# A udev rule rather than a one-off chmod because sysfs nodes are recreated at
-# boot with default permissions — a manual chmod does not survive a reboot.
+# An earlier revision of this script loosened it to make power logging scriptable.
+# Reverted on purpose: those counters were restricted in response to PLATYPUS
+# (CVE-2020-8694), where fine-grained energy readings leak data-dependent power
+# draw precisely enough to recover AES and RSA keys from another process. A
+# status-bar reading is not worth reopening that.
 #
-# (These were locked to root over CVE-2020-8694; single-user box, deliberate.)
-#
-# REVERSE: rm /etc/udev/rules.d/99-rapl-readable.rules
-#          then reboot, or: sudo udevadm trigger --subsystem-match=powercap
-if [ "${SKIP_RAPL:-}" != "1" ]; then
-  step "9. RAPL power counters readable"
-  run "$SUDO tee /etc/udev/rules.d/99-rapl-readable.rules >/dev/null <<'EOF'
-# Managed by configs/system/legion.sh — power measurement without root.
-SUBSYSTEM==\"powercap\", KERNEL==\"intel-rapl:*\", ACTION==\"add\", \\
-  RUN+=\"/bin/chmod a+r /sys%p/energy_uj\"
-EOF"
-  run "$SUDO udevadm control --reload"
-  run "$SUDO udevadm trigger --subsystem-match=powercap"
-  info "RAPL readable — verify: cat /sys/class/powercap/intel-rapl:0/energy_uj"
-fi
+# When you genuinely need the detail, either run turbostat with a password prompt,
+# or chmod it for the duration and put it back:
+#   sudo chmod a+r /sys/class/powercap/intel-rapl:0/energy_uj
+# Nothing persists it, which is the intended behaviour — a reboot restores 0400.
 
 step "Done"
 cat <<'DONE'

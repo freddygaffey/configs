@@ -29,7 +29,6 @@ Lenovo Legion 5 16IRX9 — i9-14900HX, RTX 4070 Mobile + Intel iGPU, 2560x1600
 | 6 | Battery conservation (opt-in) | Caps charge ~60%; reduces calendar wear on an always-plugged host |
 | 7 | Reduce tracker scope | It was indexing ~600 GB of archives and corpora |
 | 8 | Narrow NOPASSWD sudo allowlist | See [sudoers](#sudoers) below |
-| 9 | RAPL counters readable by `adm` | Power measurement without root; deliberate trade-off, see below |
 
 Each step is idempotent, skippable via `SKIP_<STEP>=1`, and its reversal is
 documented in the comment above it in the script.
@@ -41,7 +40,6 @@ systemctl is-enabled sleep.target                             # masked
 cat /sys/firmware/acpi/platform_profile                       # performance on AC
 cat /sys/bus/pci/devices/0000:01:00.0/power/runtime_status     # suspended
 vainfo | grep VAProfileH264High                               # hardware decode
-cat /sys/class/powercap/intel-rapl:0/energy_uj                 # readable, no sudo
 awk '{print $1/1000000" W"}' /sys/class/power_supply/BAT1/power_now   # unplugged only
 sudo -l | grep rfcomm                                         # bind/release/show/connect
 sudo rfcomm listen 0 1 /bin/sh                                # must be REFUSED
@@ -94,15 +92,23 @@ sudo rfcomm release 0
 
 `fred` is in `dialout`, so MAVProxy itself needs no sudo — only the bind does.
 
-### RAPL counters (step 9)
+### RAPL counters — left alone on purpose
 
-`/sys/class/powercap/intel-rapl:*/energy_uj` is the package energy counter — the
-only way to split power draw into CPU vs iGPU vs rest, since
-`BAT1/power_now` reports whole-system only. It ships `0400 root`; step 9 makes it
-readable.
+`/sys/class/powercap/intel-rapl:*/energy_uj` is the package energy counter, and
+the only way to split draw into CPU vs iGPU vs rest (`BAT1/power_now` is
+whole-system only). It ships `0400 root` and this script leaves it that way.
 
-A udev rule rather than a `chmod` because sysfs nodes are recreated at boot with
-default permissions — a manual chmod does not persist.
+An earlier revision loosened it so power logging could run unprivileged. Reverted:
+those counters were locked down in response to **PLATYPUS (CVE-2020-8694)**, where
+fine-grained energy readings leak data-dependent power draw precisely enough to
+recover AES and RSA keys from another process. Convenient power graphs are not
+worth reopening that.
 
-Locked to root originally over CVE-2020-8694. Single-user machine, deliberate
-choice. `SKIP_RAPL=1` to leave it alone.
+When the detail is actually needed, either run `turbostat` with a password prompt,
+or open it temporarily:
+
+```sh
+sudo chmod a+r /sys/class/powercap/intel-rapl:0/energy_uj
+```
+
+Nothing persists that — a reboot restores `0400`, which is the point.
