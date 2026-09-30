@@ -18,14 +18,14 @@
  * matches the bar rather than the terminal, and needs no re-render when the
  * mode changes.
  *
- * The alpha suffix on the background (f5 = 96%) leaves only a hint of the
+ * The alpha suffix on the background (fa = 98%) leaves only a trace of the
  * wallpaper. 87% was tried first and washed out badly over a bright image — a
  * launcher sits on top of the wallpaper, unlike the bar which sits against the
  * screen edge, so it takes far more of the image behind it.
  */
 
 * {
-    bg:       @ui_menu_bg@f5;
+    bg:       @ui_menu_bg@fa;
     bg-alt:   @ui_panel@;
     fg:       @ui_fg@;
     accent:   @ui_accent@;
