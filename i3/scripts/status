@@ -30,6 +30,7 @@ import threading
 CONF = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
     "~/.config/i3/i3status.conf")
 GPU = os.path.expanduser("~/.config/i3/scripts/gpu-status")
+BT = os.path.expanduser("~/.config/i3/scripts/bt-status")
 
 # carbonfox, matching the rest of the bar
 GOOD = "#25be6a"
@@ -85,6 +86,19 @@ def helper_block(path, name):
 
 def gpu_block():
     return helper_block(GPU, "gpu")
+
+
+def bt_block():
+    """Bluetooth icon. Dim when idle, accented when something is connected —
+    bluetooth being on is unremarkable; a device being connected is not."""
+    block = helper_block(BT, "bluetooth")
+    if block is None:
+        return None
+    powered = "Powered: yes" in subprocess.run(
+        ["bluetoothctl", "show"], capture_output=True, text=True).stdout
+    connected = any(ch.isdigit() for ch in block["full_text"])
+    block["color"] = ACCENT if connected else (DIM if powered else BAD)
+    return block
 
 
 def colour_load(block):
@@ -176,6 +190,16 @@ def transform(blocks):
         colour_gpu(block)
         blocks.insert(index + 1, block)
 
+    # Bluetooth beside wifi and volume, so the system indicators sit together.
+    bt = bt_block()
+    if bt is not None:
+        anchor = next((i for i, b in enumerate(blocks)
+                       if b.get("name") == "wireless"), None)
+        if anchor is None:
+            anchor = next((i for i, b in enumerate(blocks)
+                           if b.get("name") == "volume"), len(blocks) - 2)
+        blocks.insert(anchor + 1, bt)
+
     # Theme indicator next to the clock, at the far left.
     mode = ui_mode_block()
     if mode is not None:
@@ -216,9 +240,7 @@ CLICK_ACTIONS = {
     # The system indicators open their own managers, which is what the tray
     # icons used to be for.
     ("wireless", 1): toggle("nm-connection-editor", "nm-connection-editor"),
-    # Right-click the wifi block for Bluetooth: it is the other radio, and it is
-    # no longer in the tray.
-    ("wireless", 3): toggle("blueman-manager", "blueman-manager"),
+    ("bluetooth", 1): toggle("blueman-manager", "blueman-manager"),
     ("battery", 1): toggle("gnome-power-statistics", "gnome-power-statistics"),
     # Volume is the one block where scrolling is the obvious gesture.
     ("volume", 3): ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],

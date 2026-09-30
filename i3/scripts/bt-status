@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# Bluetooth state for the i3 bar, as an icon.
+#
+# An icon rather than text: this sits in a row of system indicators and the word
+# "bt" earns less than the glyph does. Needs the Nerd Font, which the desktop
+# bootstrap installs — U+F293 is nf-fa-bluetooth, present in both Nerd Fonts v2
+# and v3.
+#
+# In the bar rather than the tray because i3bar orders tray icons by registration
+# order with no way to change it, so Bluetooth kept landing between Discord and
+# Bitwarden rather than beside the other system controls.
+#
+# bluetoothctl answers from the local daemon in ~25ms, so this is cheap enough to
+# run every few seconds.
+
+set -u
+
+# U+F293 (nf-fa-bluetooth) built from its UTF-8 bytes rather than pasted in
+# literally: the glyph is in a private-use range and does not survive every
+# editor, shell heredoc or copy-paste intact — written literally it silently
+# became an empty string.
+ICON=$(printf '\357\212\223')
+
+command -v bluetoothctl >/dev/null 2>&1 || exit 0
+
+powered=$(bluetoothctl show 2>/dev/null | awk '/Powered:/ {print $2; exit}')
+
+# No adapter at all: say nothing rather than show a dead icon.
+[ -n "$powered" ] || exit 0
+
+if [ "$powered" != "yes" ]; then
+    printf '%s' "$ICON"
+    exit 0
+fi
+
+count=$(bluetoothctl devices Connected 2>/dev/null | grep -c '^Device' || true)
+if [ "${count:-0}" -gt 0 ]; then
+    printf '%s %s' "$ICON" "$count"
+else
+    printf '%s' "$ICON"
+fi
