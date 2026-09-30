@@ -36,6 +36,7 @@
 #            note in the README) — Firefox, Chrome and Electron follow it
 #   kitty    `kitty @ set-colors` repaints open windows
 #   nvim     :colorscheme pushed to every running instance over its RPC socket
+#   bar      i3status poked with SIGUSR1 so the mode indicator updates at once
 #   tmux     theme sourced into every running server
 #   dunst    killed; D-Bus activation restarts it on the next notification
 #   desktop  root window filled with the palette's bg, or an image if the
@@ -168,6 +169,18 @@ apply_dunst() {
     pkill -x dunst >/dev/null 2>&1 || true
 }
 
+refresh_bar() {
+    # i3status refreshes on its own interval (5s), so the bar's mode indicator
+    # lagged up to five seconds behind the switch — which read as the bar being
+    # slow to change, even though its colours are identical across modes and
+    # never change at all.
+    #
+    # SIGUSR1 makes i3status emit a line immediately. -x so this cannot match
+    # the wrapper script or anything else with i3status in its command line.
+    pkill -USR1 -x i3status >/dev/null 2>&1 || true
+}
+
+
 apply_i3() {
     # restart, not reload: colours are only read at config parse time. restart
     # re-reads the config and keeps the layout and windows exactly as they are —
@@ -247,6 +260,7 @@ apply_dunst
 # Written before the i3 restart: the restart replaces this process's parent, so
 # anything after it may not run.
 printf '%s\n' "$mode" > "$MODE_FILE"
+refresh_bar
 
 if [ "$i3_changed" = "1" ]; then
     echo "ui-mode: $mode ($theme) — restarting i3 for its colours"
