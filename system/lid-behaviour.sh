@@ -2,7 +2,10 @@
 # Lid behaviour: stay up on AC, suspend on battery.
 #
 #   plugged in  + lid shut  ->  stays awake and reachable over ssh, but LOCKS
-#   on battery  + lid shut  ->  suspends, so it does not flatten the pack
+#   on battery  + lid shut  ->  LOCKS, then suspends, so it does not flatten the
+#                               pack. The lock happens before the suspend, not
+#                               on resume: xss-lock holds a delay lock until the
+#                               screen is covered.
 #
 # `lock`, not `ignore`. Staying awake and staying unlocked are separate things,
 # and ignore conflated them: the machine sat there running with the desktop wide

@@ -112,6 +112,33 @@ find "$CACHE" -maxdepth 1 -name 'lock-*.png' ! -name "$(basename "$OUT")" -delet
 
 [ "$BUILD_ONLY" = 1 ] && { echo "$OUT"; exit 0; }
 
-# -n so it does not fork: xss-lock needs the process to stay in the foreground,
-# or it thinks locking finished immediately and the screen unlocks itself.
+# When xss-lock is locking because the system is about to SLEEP, it passes a
+# delay-lock file descriptor in $XSS_SLEEP_LOCK_FD. The contract is that the
+# locker closes it once the screen is actually covered, and systemd then proceeds
+# with the suspend.
+#
+# Plain i3lock knows nothing about that variable and never closes it, so the lock
+# was held until InhibitDelayMaxSec expired — 30s on this machine. Shutting the
+# lid on battery therefore locked at once and then sat awake for half a minute
+# before suspending, draining the battery with the lid closed.
+#
+# So in the sleep case: start i3lock forking, wait until it is really up, release
+# the lock, then stay alive while it runs so xss-lock can tell when the screen is
+# unlocked again.
+if [ -n "${XSS_SLEEP_LOCK_FD:-}" ] && [ -e "/dev/fd/$XSS_SLEEP_LOCK_FD" ]; then
+    i3lock -i "$OUT"
+    n=0
+    while ! pgrep -x i3lock >/dev/null 2>&1 && [ "$n" -lt 50 ]; do
+        sleep 0.1
+        n=$((n + 1))
+    done
+    # eval because the FD number is only known at runtime, and redirections
+    # cannot take a variable directly.
+    eval "exec $XSS_SLEEP_LOCK_FD<&-"
+    while pgrep -x i3lock >/dev/null 2>&1; do sleep 0.5; done
+    exit 0
+fi
+
+# -n so it does not fork: outside the sleep case xss-lock needs the process to
+# stay in the foreground, or it thinks locking finished and unlocks immediately.
 exec i3lock -n -i "$OUT"
