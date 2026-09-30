@@ -103,9 +103,36 @@ palette_value() {   # palette_value <palette> <key>
 }
 
 apply_gtk() {
-    command -v gsettings >/dev/null 2>&1 || return 0
-    gsettings set org.gnome.desktop.interface gtk-theme "$1" 2>/dev/null || true
-    gsettings set org.gnome.desktop.interface color-scheme "$2" 2>/dev/null || true
+    if command -v gsettings >/dev/null 2>&1; then
+        gsettings set org.gnome.desktop.interface gtk-theme "$1" 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface color-scheme "$2" 2>/dev/null || true
+    fi
+
+    # gsettings alone is not enough under i3, and this is the regression that
+    # turned up after leaving GNOME: GNOME runs gsd-xsettings, which BROADCASTS
+    # the theme to every GTK app over XSETTINGS. i3 runs no XSETTINGS daemon, so
+    # GTK apps never hear about the dconf change. They fall back to
+    # gtk-3.0/settings.ini, which did not exist, and then to a built-in default —
+    # which is why Firefox stayed dark in light mode with its theme correctly set
+    # to "System theme — auto".
+    #
+    # Writing settings.ini is the fallback GTK looks for when nothing is
+    # broadcasting. Both GTK 3 and 4, since the two read separate files.
+    prefer_dark=0
+    [ "$2" = "prefer-dark" ] && prefer_dark=1
+    for ver in 3.0 4.0; do
+        dir="$HOME/.config/gtk-$ver"
+        mkdir -p "$dir" || continue
+        cat > "$dir/settings.ini" <<EOF
+# Written by ui-mode. Do not edit — it is regenerated on every mode switch.
+#
+# Needed because i3 has no XSETTINGS daemon, so GTK apps cannot see the dconf
+# values gsettings writes and read this instead.
+[Settings]
+gtk-theme-name=$1
+gtk-application-prefer-dark-theme=$prefer_dark
+EOF
+    done
 }
 
 apply_kitty() {
