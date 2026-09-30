@@ -190,57 +190,79 @@ cat <<'DONE'
 DONE
 
 # ── 6. Offer the host-level scripts ────────────────────────────────────
-# These stay separate files, because they write to /etc and are specific to one
-# laptop — but printing "see system/" at the end is a note nobody acts on, so
-# ask instead. Each is still its own script you can read and run by hand.
+# These stay separate files — they write to /etc and suit one particular laptop —
+# but ending with "see system/" is a note nobody acts on, so ask instead.
 #
-# Only prompts on a real terminal. Under `curl | bash` stdin is the script
-# itself, so read from /dev/tty; with no tty at all (truly unattended) skip
-# entirely rather than hanging. Same idiom as bootstrap.sh's swap prompt.
+# Prompts read from /dev/tty: under `curl | bash` stdin is the script itself. With
+# no tty at all, skip rather than hang. Same idiom as bootstrap.sh's swap prompt.
+
+# Ask about one script; run it on yes.
+#   offer <script-name> <plain-English description>
+offer() {
+  local script="$1"
+  local description="$2"
+  local reply
+
+  if [ ! -x "$DOTFILES/system/$script.sh" ]; then
+    return 0
+  fi
+
+  printf '\n  %s\n' "$description" > /dev/tty
+  printf '  run system/%s.sh ?  [y/N] ' "$script" > /dev/tty
+  read -r reply < /dev/tty || return 0
+
+  case "$reply" in
+    y | Y | yes | YES)
+      # Warn and carry on. Aborting here would silently skip every later script.
+      "$DOTFILES/system/$script.sh" || warn "system/$script.sh failed"
+      ;;
+  esac
+}
+
 offer_system_scripts() {
   if [ ! -e /dev/tty ]; then
     info "No terminal — skipping host-level setup. See system/."
     return 0
   fi
-  local ans name desc
-  printf '\n\033[0;33m??\033[0m Configure host-level settings now? They write to /etc. [y/N] ' > /dev/tty
-  read -r ans < /dev/tty || return 0
-  case "$ans" in
-    y|Y|yes|YES) ;;
-    *) info "Skipped — run them from system/ whenever you like."; return 0 ;;
+
+  cat <<'INTRO' > /dev/tty
+
+  ─── Host-level settings ────────────────────────────────────────────
+
+  Seven optional changes, asked one at a time. Each writes to /etc or
+  changes system state, and each has its undo in its own header.
+  Saying no to all of them is fine — nothing above depends on them.
+
+INTRO
+
+  local reply
+  printf '  Go through them? [y/N] ' > /dev/tty
+  read -r reply < /dev/tty || return 0
+  case "$reply" in
+    y | Y | yes | YES) ;;
+    *)
+      info "Skipped — run them from system/ whenever you like."
+      return 0
+      ;;
   esac
 
-  # name:description — asked one at a time, because wanting one of these is no
-  # reason to want all of them.
-  for entry in \
-    "lid-behaviour:lid shut stays up on AC, suspends on battery" \
-    "power-on-ac:performance on AC, power-saver on battery (~5-8 W)" \
-    "dgpu-sleep:let the dGPU runtime-suspend (~12 W)" \
-    "vaapi:hardware video decode (browser: 10-20 W -> 3-5 W)" \
-    "sudoers:narrow NOPASSWD allowlist" \
-    "tracker-scope:stop indexing the bulk archives" \
-    "snap-retain:cap snap revisions at 2"
-  do
-    name=${entry%%:*}
-    desc=${entry#*:}
-    [ -x "$DOTFILES/system/$name.sh" ] || continue
-    printf '   %-16s %s\n     run it? [y/N] ' "$name" "$desc" > /dev/tty
-    read -r ans < /dev/tty || return 0
-    case "$ans" in
-      y|Y|yes|YES)
-        # Never let one failure abort the rest, or a missing package early on
-        # silently skips everything after it.
-        "$DOTFILES/system/$name.sh" || warn "system/$name.sh failed — continuing"
-        ;;
-    esac
-  done
+  offer lid-behaviour "Lid shut: stay awake on AC, suspend on battery."
+  offer power-on-ac   "Switch the power profile when you plug in or unplug. Around 5-8 W."
+  offer dgpu-sleep    "Let the discrete GPU sleep when nothing is using it. Around 12 W."
+  offer vaapi         "Hardware video decode. A browser costs 10-20 W without it, 3-5 W with."
+  offer sudoers       "A short list of commands that skip the sudo password prompt."
+  offer tracker-scope "Stop the file indexer crawling the bulk archives."
+  offer snap-retain   "Keep 2 snap revisions instead of 3. Frees roughly 30-45 GB."
 
   cat <<'EXTRA' > /dev/tty
 
-  Not offered above, deliberately:
-    ./system/battery-conservation.sh on   caps charge ~60%; only for a machine
-                                          that lives plugged in
-    sudo tailscale up --ssh               one-time and interactive
+  Two left out on purpose:
+
+    ./system/battery-conservation.sh on   caps the charge at ~60%. Right for a
+                                          machine that stays plugged in; turn it
+                                          off before travelling.
+    sudo tailscale up --ssh               one-time, needs a browser login.
+
 EXTRA
 }
 offer_system_scripts
