@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+# Volume control with an on-screen notification.
+#
+#   volume up | down | mute
+#
+# GNOME showed an OSD when you pressed the volume keys; i3 shows nothing, so
+# changing volume is silent in both senses. This pipes through dunst instead.
+#
+# The stack tag matters: without it every keypress adds another notification and
+# you get a column of them. With it, dunst replaces the existing one in place, so
+# holding the key just updates a single popup.
+
+set -eu
+
+SINK='@DEFAULT_SINK@'
+STEP="${VOLUME_STEP:-5}"
+
+case "${1:-}" in
+    up)   pactl set-sink-mute "$SINK" 0; pactl set-sink-volume "$SINK" "+${STEP}%" ;;
+    down) pactl set-sink-mute "$SINK" 0; pactl set-sink-volume "$SINK" "-${STEP}%" ;;
+    mute) pactl set-sink-mute "$SINK" toggle ;;
+    *)    echo "usage: $0 up|down|mute" >&2; exit 1 ;;
+esac
+
+muted=$(pactl get-sink-mute "$SINK" | awk '{print $2}')
+level=$(pactl get-sink-volume "$SINK" | grep -oE '[0-9]+%' | head -1 | tr -d '%')
+
+command -v notify-send >/dev/null 2>&1 || exit 0
+
+if [ "$muted" = "yes" ]; then
+    notify-send -t 1200 -h string:x-dunst-stack-tag:volume \
+                -h int:value:0 -i audio-volume-muted "Muted"
+else
+    notify-send -t 1200 -h string:x-dunst-stack-tag:volume \
+                -h "int:value:$level" -i audio-volume-high "Volume ${level}%"
+fi

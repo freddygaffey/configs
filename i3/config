@@ -232,6 +232,11 @@ for_window [class="Nm-connection-editor"] floating enable
 # around for something you glance at and dismiss.
 for_window [class="gnome-calculator"]  floating enable
 for_window [class="Gnome-calculator"]  floating enable
+# Opened by clicking a bar block — glance-and-dismiss, so they float too.
+for_window [class="Gnome-system-monitor"] floating enable
+for_window [class="Baobab"]            floating enable
+for_window [class="Gnome-calendar"]    floating enable
+for_window [class="Gnome-power-statistics"] floating enable
 
 # ── Hardware keys (GNOME used to handle these) ─────────────────────────
 # brightnessctl needs no root: the package ships a udev rule granting the
@@ -239,10 +244,15 @@ for_window [class="Gnome-calculator"]  floating enable
 bindsym XF86MonBrightnessUp   exec --no-startup-id brightnessctl set +5%
 bindsym XF86MonBrightnessDown exec --no-startup-id brightnessctl set 5%-
 
-# Ubuntu 24.04 is PipeWire, but pactl still drives it via pipewire-pulse.
-bindsym XF86AudioRaiseVolume  exec --no-startup-id pactl set-sink-volume @DEFAULT_SINK@ +5%
-bindsym XF86AudioLowerVolume  exec --no-startup-id pactl set-sink-volume @DEFAULT_SINK@ -5%
-bindsym XF86AudioMute         exec --no-startup-id pactl set-sink-mute @DEFAULT_SINK@ toggle
+# Volume, via a script that also shows an on-screen notification — GNOME had an
+# OSD for this and i3 has none, so without it a volume change is invisible.
+#
+# NB these are the MEDIA keysyms, which on this Legion's function-first F-row
+# means holding Fn (Fn+F1/F2/F3). Fn+Esc toggles Fn-lock if you would rather have
+# the media keys be primary.
+bindsym XF86AudioRaiseVolume  exec --no-startup-id ~/.config/i3/scripts/volume up
+bindsym XF86AudioLowerVolume  exec --no-startup-id ~/.config/i3/scripts/volume down
+bindsym XF86AudioMute         exec --no-startup-id ~/.config/i3/scripts/volume mute
 bindsym XF86AudioMicMute      exec --no-startup-id pactl set-source-mute @DEFAULT_SOURCE@ toggle
 
 # Fn+Q on this Legion cycles the ACPI platform profile. Some firmware revisions

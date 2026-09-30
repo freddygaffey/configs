@@ -25,6 +25,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 
 CONF = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
     "~/.config/i3/i3status.conf")
@@ -157,17 +158,83 @@ def transform(blocks):
     return [b for b in blocks if b.get("full_text", "").strip()]
 
 
+# ── Click actions ──────────────────────────────────────────────────────
+# i3bar posts click events back on our stdin once the header says
+# "click_events": true. Each is a JSON object with the block's name/instance and
+# a button number: 1 left, 2 middle, 3 right, 4 scroll up, 5 scroll down.
+#
+# Opening a GUI is the honest version of a "dropdown" here — i3bar has no menu
+# primitive, and a real popup would mean drawing our own window.
+CLICK_ACTIONS = {
+    ("tztime", 1): ["gnome-calendar"],
+    ("cpu_usage", 1): ["gnome-system-monitor", "--show-resources-tab"],
+    ("cpu_temperature", 1): ["gnome-system-monitor", "--show-resources-tab"],
+    ("load", 1): ["gnome-system-monitor", "--show-processes-tab"],
+    ("memory", 1): ["gnome-system-monitor", "--show-resources-tab"],
+    ("disk_info", 1): ["baobab"],
+    ("volume", 1): ["pavucontrol"],
+    ("battery", 1): ["gnome-power-statistics"],
+    # Volume is the one block where scrolling is the obvious gesture.
+    ("volume", 3): ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+    ("volume", 4): ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"],
+    ("volume", 5): ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%"],
+    # The profile block cycles the profile, same as Super+p.
+    ("read_file", 1): [os.path.expanduser(
+        "~/.config/i3/scripts/cycle-power-profile")],
+    # nvidia-smi in a terminal: nvtop would be nicer but is not installed.
+    ("gpu", 1): ["sh", "-c",
+                 "$HOME/.config/i3/scripts/terminal -e sh -c "
+                 "'nvidia-smi; echo; read -p \"[enter to close]\" _'"],
+}
+
+
+def handle_clicks():
+    """Read click events from i3bar and act on them."""
+    for line in sys.stdin:
+        line = line.strip().lstrip(",")
+        if not line or line == "[":
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        action = CLICK_ACTIONS.get((event.get("name"), event.get("button")))
+        if not action:
+            continue
+        try:
+            subprocess.Popen(action, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError:
+            pass
+
+
 def main():
     proc = subprocess.Popen(["i3status", "-c", CONF],
                             stdout=subprocess.PIPE, text=True)
 
-    # Header and the opening '[' pass through untouched.
-    for _ in range(2):
-        line = proc.stdout.readline()
-        if not line:
-            return
-        sys.stdout.write(line)
-        sys.stdout.flush()
+    # The header, with click events switched on. i3status does not set this, so
+    # it has to be spliced in — without it i3bar never sends us any clicks.
+    header = proc.stdout.readline()
+    if not header:
+        return
+    try:
+        head = json.loads(header)
+        head["click_events"] = True
+        sys.stdout.write(json.dumps(head) + "\n")
+    except json.JSONDecodeError:
+        sys.stdout.write(header)
+    sys.stdout.flush()
+
+    # The opening '[' passes through untouched.
+    line = proc.stdout.readline()
+    if not line:
+        return
+    sys.stdout.write(line)
+    sys.stdout.flush()
+
+    # Clicks arrive on stdin, independently of i3status's output.
+    threading.Thread(target=handle_clicks, daemon=True).start()
 
     for line in proc.stdout:
         line = line.rstrip("\n")
