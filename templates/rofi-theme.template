@@ -1,12 +1,15 @@
 /* GENERATED — do not edit ~/.config/rofi/config.rasi by hand.
- * Rendered from templates/rofi-theme.template with a themes/*.env palette by
+ * Rendered from templates/rofi-theme.template with a themes/<name>.env palette by
  * i3/scripts/ui-mode.
  *
- * Behaviour and colours are in ONE file on purpose. Splitting them meant a
- * @theme include, and rofi would not load it from any form tried — "theme",
- * an absolute path, or @import — while `rofi -dump-theme` prints only a header
- * so there was no way to confirm what it had read. One file removes the
- * question.
+ * Behaviour and colours are in ONE file on purpose: splitting them needed a
+ * @theme include, and rofi would not load it from any form tried.
+ *
+ * NEVER write a slash-star sequence inside these comments. rofi's rasi parser
+ * nests block comments, so one opens a second comment, the closing marker ends
+ * only the inner one, and the OUTER comment swallows the rest of the file —
+ * silently. That is what made this config appear to be ignored entirely: a
+ * comment mentioning a glob pattern for the themes directory.
  *
  * Uses the ui_* roles, the same neutral slate as the i3 bar — so the launcher
  * matches the bar rather than the terminal, and needs no re-render when the
