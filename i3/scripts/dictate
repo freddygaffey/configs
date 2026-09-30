@@ -1,0 +1,33 @@
+#!/usr/bin/env sh
+# Front end for Lyrebird dictation (offline speech-to-text).
+#
+#   dictate --daemon    stay resident with the Whisper model loaded
+#   dictate --toggle    start/stop recording (what F9 runs)
+#
+# Exists so i3 does not hardcode the checkout path. Lyrebird is a scratch
+# project and has already moved once (~/lyrebird -> ~/junkcode/lyrebird), which
+# silently broke the keybinding: i3 kept running a path that was no longer
+# there, and F9 did nothing with no error anywhere.
+#
+# LYREBIRD_DIR overrides the search if you put it somewhere else again.
+set -eu
+
+for candidate in \
+    "${LYREBIRD_DIR:-}" \
+    "$HOME/junkcode/lyrebird" \
+    "$HOME/lyrebird" \
+    "$HOME/src/lyrebird" \
+    "$HOME/code/lyrebird"
+do
+    [ -n "$candidate" ] || continue
+    if [ -x "$candidate/.venv/bin/python" ] && [ -f "$candidate/src/dictate.py" ]; then
+        cd "$candidate" || exit 1
+        exec ./.venv/bin/python src/dictate.py "$@"
+    fi
+done
+
+command -v notify-send >/dev/null 2>&1 && \
+    notify-send -u critical "Lyrebird not found" \
+        "Looked in ~/junkcode/lyrebird and ~/lyrebird. Set LYREBIRD_DIR."
+echo "lyrebird checkout not found" >&2
+exit 1

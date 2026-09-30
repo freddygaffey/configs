@@ -132,7 +132,7 @@ exec_always --no-startup-id systemctl --user import-environment DISPLAY XAUTHORI
 # Lyrebird's dictation daemon, holding the Whisper model in memory so F9 is
 # instant. `exec` not `exec_always`: reloading i3 should not restart it and throw
 # away a model that took seconds to load.
-exec --no-startup-id sh -c '[ -x "$HOME/lyrebird/.venv/bin/python" ] && cd "$HOME/lyrebird" && exec ./.venv/bin/python src/dictate.py --daemon'
+exec --no-startup-id ~/.config/i3/scripts/dictate --daemon
 
 # ── Look ───────────────────────────────────────────────────────────────
 # Window colours and the whole bar block are generated per UI mode into
@@ -446,7 +446,7 @@ bindsym XF86Calculator exec --no-startup-id gnome-calculator
 # pynput. That is the standard split, avoids two things fighting over one key,
 # and is the only arrangement that would survive a move to Wayland — where
 # pynput's X11 grab does not work at all.
-bindsym F9 exec --no-startup-id sh -c 'cd "$HOME/lyrebird" && ./.venv/bin/python src/dictate.py --toggle'
+bindsym F9 exec --no-startup-id ~/.config/i3/scripts/dictate --toggle
 
 # ── Session ────────────────────────────────────────────────────────────
 # Help. i3 has no built-in help key, and Debian strips its HTML docs, so this
