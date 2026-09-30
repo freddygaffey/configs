@@ -327,9 +327,21 @@ PAGE = r"""<!doctype html>
 <meta charset="utf-8">
 <title>Wallpaper framing</title>
 <style>
+  /* Dark by default, light when the desktop asks for it. The page had a
+     hardcoded dark palette, which looked wrong sitting next to a light terminal
+     in fly mode — the whole point of ui-mode is that surfaces agree. Firefox
+     reports the desktop's preference through the XDG portal, so
+     prefers-color-scheme follows ui-mode with no wiring of our own.
+     Values are carbonfox and dayfox, the same palettes everything else uses. */
   :root {
     --bg:#161616; --panel:#1f1f22; --line:#2a2a2e; --fg:#f2f4f8;
     --mut:#8b8b90; --accent:#78a9ff; --ok:#25be6a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg:#f6f2ee; --panel:#e4dcd4; --line:#d6cfc4; --fg:#1c1a17;
+      --mut:#837a72; --accent:#2848a9; --ok:#396847;
+    }
   }
   * { box-sizing:border-box; }
   body { margin:0; height:100vh; display:flex; background:var(--bg); color:var(--fg);
@@ -360,7 +372,7 @@ PAGE = r"""<!doctype html>
 
   /* The frame IS the screen. It never moves; the image moves behind it. */
   #stageWrap { flex:1; display:grid; place-items:center; overflow:hidden; padding:20px; }
-  #frame { position:relative; overflow:hidden; background:#161616;
+  #frame { position:relative; overflow:hidden; background:var(--bg);
            box-shadow:0 0 0 1px var(--line), 0 0 0 9999px rgba(10,10,10,.62);
            cursor:grab; touch-action:none; }
   #frame.grabbing { cursor:grabbing; }
