@@ -45,6 +45,13 @@ unlink_restore "$HOME/.config/ghostty/config"
 unlink_restore "$HOME/.Xresources"
 unlink_restore "$HOME/.config/kitty/kitty.conf"
 
+# Put the colour prompt back the way Ubuntu ships it. Only touches the line the
+# bootstrap scripts uncommented, so a hand-edited .bashrc is left alone.
+if [ -f "$HOME/.bashrc" ] && grep -q '^force_color_prompt=yes' "$HOME/.bashrc"; then
+  sed -i 's/^force_color_prompt=yes$/#force_color_prompt=yes/' "$HOME/.bashrc"
+  info "restored the default (monochrome) colour_prompt setting in ~/.bashrc"
+fi
+
 # Take the git-prompt source line (and its comment) back out of the shell rc
 # files — the bootstrap appended it there. Rewrites the file in place so the
 # rest of your rc, and the file's permissions, are untouched.

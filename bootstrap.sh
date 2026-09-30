@@ -251,6 +251,33 @@ enable_prompt() {
 }
 enable_prompt
 
+# ── 3d. Colour prompt on modern terminals ──────────────────────────────
+# Ubuntu's .bashrc only enables the colour prompt for TERM of xterm-color or
+# *-256color. Modern terminals advertise their own name — xterm-kitty,
+# xterm-ghostty — which match neither, so the prompt silently comes out
+# monochrome. Inside tmux it is tmux-256color, which does match, so the colour
+# appears to come and go depending on whether you are in tmux.
+#
+# Ubuntu ships force_color_prompt=yes commented out for exactly this; uncomment
+# it rather than widening the case, which would not survive a .bashrc update.
+#
+# Not fixed by setting kitty's `term` to xterm-256color: that makes kitty lie
+# about what it is, and chafa sniffs TERM to choose the kitty graphics protocol
+# that the tmux image popup relies on.
+enable_color_prompt() {
+  rc="$HOME/.bashrc"
+  [ -f "$rc" ] || return 0
+  if grep -q '^force_color_prompt=yes' "$rc"; then
+    info "colour prompt already enabled"
+    return 0
+  fi
+  if grep -q '^#force_color_prompt=yes' "$rc"; then
+    sed -i.bak-precolour 's/^#force_color_prompt=yes$/force_color_prompt=yes/' "$rc"
+    info "enabled colour prompt in $rc"
+  fi
+}
+enable_color_prompt
+
 # ── 3b. tmux plugins via TPM (resurrect/continuum) ─────────────────────
 # Clone TPM, then install the plugins declared in tmux.conf headlessly so a
 # fresh box has session save/restore working without a manual `prefix + I`.
