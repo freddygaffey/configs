@@ -39,6 +39,8 @@
 #   bar      i3status poked with SIGUSR1 so the mode indicator updates at once
 #   tmux     theme sourced into every running server
 #   dunst    killed; D-Bus activation restarts it on the next notification
+#   claude   settings.json theme merged with jq — NEW sessions only, a running
+#            Claude Code keeps the theme it started with
 #   desktop  root window filled with the palette's bg, or an image if the
 #            palette names a wallpaper
 #   i3       `i3-msg restart`, which re-reads the config and keeps your layout
@@ -197,6 +199,38 @@ apply_i3() {
 # substitution to return the nvim theme name, so it is a subshell — anything it
 # assigns is lost. The caller computes the path and passes it in.
 # Sets I3_CHANGED=1 if i3's colours differ from what is already in place.
+# Claude Code. Not rendered from a template like the other apps, for two
+# reasons: it takes a NAMED theme rather than hex colours, and its settings.json
+# holds unrelated settings (model, plugins, permissions) that a rendered file
+# would destroy. So the one key is merged in with jq.
+#
+# It follows the terminal's palette rather than the desktop's, because that is
+# where it runs. Its own "auto" setting follows the system colour scheme, which
+# in light mode means light — inside a deliberately dark terminal. Exactly wrong.
+#
+# Only new sessions pick this up; a running Claude Code keeps the theme it
+# started with.
+render_claude() {
+    palette="$1"
+    want=$(palette_value "$palette" claude_theme)
+    [ -n "$want" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    settings="$HOME/.claude/settings.json"
+    [ -r "$settings" ] || return 0
+    # Skip the write when it already matches, so a mode switch does not churn
+    # the file (and its mtime) for nothing.
+    [ "$(jq -r '.theme // empty' "$settings" 2>/dev/null)" = "$want" ] && return 0
+    # Temp file in the SAME directory, so the mv is atomic — across filesystems
+    # it degrades to copy+unlink, which can truncate settings.json on a crash.
+    tmp=$(mktemp "$settings.XXXXXX") || return 0
+    if jq --arg t "$want" '.theme = $t' "$settings" > "$tmp" 2>/dev/null \
+       && [ -s "$tmp" ]; then
+        mv "$tmp" "$settings"
+    else
+        rm -f "$tmp"
+    fi
+}
+
 render_all() {
     palette="$1"
     i3_changed=0
@@ -221,6 +255,7 @@ render_all() {
     render "$REPO/templates/dunstrc.template"     "$palette" "$HOME/.config/dunst/dunstrc" || true
     render "$REPO/templates/tmux-theme.template"  "$palette" "$HOME/.config/tmux/theme.conf" || true
     render "$REPO/templates/rofi-theme.template"  "$palette" "$HOME/.config/rofi/theme.rasi" || true
+    render_claude "$palette" || true
     # Both values on one line: this runs in a command substitution, so the
     # caller reads them back rather than seeing any variable we set.
     printf '%s %s\n' "$(palette_value "$palette" name)" "$i3_changed"
