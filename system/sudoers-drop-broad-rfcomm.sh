@@ -11,9 +11,10 @@
 #   ./sudoers-drop-broad-rfcomm.sh            show what would change
 #   ./sudoers-drop-broad-rfcomm.sh --go       apply it
 #
-# Every file is validated with `visudo -cf` BEFORE it replaces the original, and
-# swapped in with install(1) so the replacement is atomic — a half-written
-# sudoers file locks you out of sudo entirely.
+# Every file is validated with `visudo -cf` BEFORE it goes anywhere, then
+# installed THROUGH visudo, which locks the tree, validates again and replaces
+# the file as one operation. A half-written or unparseable sudoers file locks you
+# out of sudo entirely, and the recovery is a root shell or a live USB.
 set -eu
 GO=0
 [ "${1:-}" = "--go" ] && GO=1
@@ -44,8 +45,13 @@ for f in /etc/sudoers /etc/sudoers.d/*; do
     fi
 
     if [ "$GO" = 1 ]; then
-        sudo install -o root -g root -m 0440 "$tmp" "$f"
-        echo "    replaced (validated, atomic)"
+        # visudo, not install(1): install is atomic but takes no lock, so a
+        # concurrent visudo session could clobber the result. visudo locks,
+        # validates and installs as one operation. Driving it non-interactively
+        # means giving it an EDITOR that just copies our version into the temp
+        # file it hands over.
+        sudo EDITOR="cp -- $tmp" visudo -q -f "$f"
+        echo "    replaced (locked, validated, atomic)"
     else
         echo "    would replace (validated)"
     fi

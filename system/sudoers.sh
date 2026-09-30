@@ -25,7 +25,15 @@ if ! sudo visudo -c >/dev/null 2>&1; then
     exit 1
 fi
 
-sudo install -o root -g root -m 0440 "$SRC" /etc/sudoers.d/10-fred-ops
+# Install THROUGH visudo rather than writing the file ourselves. install(1) is
+# atomic, but it takes no lock: a concurrent visudo session editing the same
+# tree can still clobber the result. visudo locks, validates and installs as one
+# operation, which is the whole reason it exists.
+#
+# The EDITOR trick is how you drive it non-interactively: visudo creates a temp
+# copy and runs "$EDITOR <temp>", so an EDITOR of "cp -- $SRC" copies our file
+# over that temp; visudo then validates it and installs it itself.
+sudo EDITOR="cp -- $SRC" visudo -q -f /etc/sudoers.d/10-fred-ops
 if sudo visudo -c >/dev/null 2>&1; then
     echo "installed. check the rfcomm limit held:"
     echo "  sudo -l | grep rfcomm"
