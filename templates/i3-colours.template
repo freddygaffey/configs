@@ -22,8 +22,13 @@ bar {
     font pango:JetBrains Mono 10
     tray_output primary
     separator_symbol " | "
+    # Breathing room around the tray icons, which otherwise sit hard against
+    # each other and the clock.
+    tray_padding 6
     colors {
-        background @bg@
+        # panel, not bg: i3bar has no border option, so the only way to separate
+        # the bar from the windows below it is to make it a different shade.
+        background @panel@
         statusline @fg@
         separator  @panel@
         #                  border    background  text

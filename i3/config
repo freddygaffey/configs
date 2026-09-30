@@ -106,6 +106,8 @@ include ~/.config/i3/colours.conf
 # i3 4.22+ has gaps built in (no i3-gaps fork needed). Modest, not decorative.
 gaps inner 6
 gaps outer 0
+# A little air under the bar, so windows do not butt straight up against it.
+gaps top 2
 smart_gaps on
 smart_borders on
 default_border pixel 2

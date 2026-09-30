@@ -65,9 +65,12 @@ settings_for() {
 #
 # Substitutes @key@ for each KEY=VALUE in the palette. Built as a single sed
 # script rather than one pass per key, so the file is read and written once.
+#
+# Returns 1 if the destination was already identical. Callers use that to skip
+# work that is only needed when something actually changed — see apply_i3.
 render() {
     template="$1"; palette="$2"; dest="$3"
-    [ -r "$template" ] && [ -r "$palette" ] || return 0
+    [ -r "$template" ] && [ -r "$palette" ] || return 1
 
     script=$(
         while IFS='=' read -r key value; do
@@ -77,7 +80,15 @@ render() {
     )
 
     mkdir -p "$(dirname "$dest")"
-    sed "$script" "$template" > "$dest"
+    tmp="$dest.tmp.$$"
+    sed "$script" "$template" > "$tmp"
+
+    if [ -r "$dest" ] && cmp -s "$tmp" "$dest"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    mv "$tmp" "$dest"
+    return 0
 }
 
 palette_value() {   # palette_value <palette> <key>
@@ -145,19 +156,30 @@ apply_dunst() {
 
 apply_i3() {
     # restart, not reload: colours are only read at config parse time. restart
-    # re-reads the config and keeps the layout and windows exactly as they are.
+    # re-reads the config and keeps the layout and windows exactly as they are —
+    # but it visibly tears down and rebuilds, flashing the root window and other
+    # workspaces on the way past.
+    #
+    # So only do it when i3's colours actually changed. dark and light share the
+    # same palette (only GTK differs between them), so that switch needs no
+    # restart at all and is instant. Only a switch into or out of fly pays it.
     command -v i3-msg >/dev/null 2>&1 && i3-msg restart >/dev/null 2>&1 || true
 }
 
 # NB takes the palette PATH, not the theme name. This runs inside a command
 # substitution to return the nvim theme name, so it is a subshell — anything it
 # assigns is lost. The caller computes the path and passes it in.
+# Sets I3_CHANGED=1 if i3's colours differ from what is already in place.
 render_all() {
     palette="$1"
-    render "$REPO/templates/i3-colours.template"  "$palette" "$HOME/.config/i3/colours.conf"
-    render "$REPO/templates/kitty-theme.template" "$palette" "$HOME/.config/kitty/theme.conf"
-    render "$REPO/templates/dunstrc.template"     "$palette" "$HOME/.config/dunst/dunstrc"
-    palette_value "$palette" name
+    i3_changed=0
+    render "$REPO/templates/i3-colours.template"  "$palette" "$HOME/.config/i3/colours.conf" \
+        && i3_changed=1
+    render "$REPO/templates/kitty-theme.template" "$palette" "$HOME/.config/kitty/theme.conf" || true
+    render "$REPO/templates/dunstrc.template"     "$palette" "$HOME/.config/dunst/dunstrc" || true
+    # Both values on one line: this runs in a command substitution, so the
+    # caller reads them back rather than seeing any variable we set.
+    printf '%s %s\n' "$(palette_value "$palette" name)" "$i3_changed"
 }
 
 mode="${1:-}"
@@ -180,7 +202,9 @@ gtk_theme="$1"; colour_scheme="$2"; theme="$3"
 palette="$REPO/themes/$theme.env"
 [ -r "$palette" ] || { echo "no such theme: $theme" >&2; exit 1; }
 
-nvim_theme=$(render_all "$palette")
+render_out=$(render_all "$palette")
+nvim_theme=${render_out% *}
+i3_changed=${render_out##* }
 apply_gtk "$gtk_theme" "$colour_scheme"
 apply_kitty
 apply_nvim "${nvim_theme:-$theme}"
@@ -190,5 +214,10 @@ apply_dunst
 # Written before the i3 restart: the restart replaces this process's parent, so
 # anything after it may not run.
 printf '%s\n' "$mode" > "$MODE_FILE"
-echo "ui-mode: $mode ($theme)"
-apply_i3
+
+if [ "$i3_changed" = "1" ]; then
+    echo "ui-mode: $mode ($theme) — restarting i3 for its colours"
+    apply_i3
+else
+    echo "ui-mode: $mode ($theme)"
+fi

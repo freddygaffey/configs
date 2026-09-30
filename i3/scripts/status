@@ -53,6 +53,26 @@ PROFILE_SHORT = {
 }
 
 
+UI_MODE_FILE = os.path.expanduser("~/.config/ui-mode")
+
+# dark / light / fly, each with a glyph that reads at a glance without the word.
+MODE_GLYPH = {"dark": "\u25cf", "light": "\u25d0", "fly": "\u25cb"}
+
+
+def ui_mode_block():
+    """Which UI mode is active. Written by i3/scripts/ui-mode."""
+    try:
+        with open(UI_MODE_FILE) as handle:
+            mode = handle.read().strip()
+    except OSError:
+        return None
+    if not mode:
+        return None
+    return {"name": "uimode",
+            "full_text": f"{MODE_GLYPH.get(mode, '?')} {mode}",
+            "color": DIM if mode == "dark" else ACCENT}
+
+
 def gpu_block():
     """GPU utilisation and memory, or None if unavailable."""
     try:
@@ -152,6 +172,11 @@ def transform(blocks):
         colour_gpu(block)
         blocks.insert(index + 1, block)
 
+    # Theme indicator next to the clock, at the far left.
+    mode = ui_mode_block()
+    if mode is not None:
+        blocks.insert(1 if blocks else 0, mode)
+
     # Drop empty blocks. A module with format_down = "" still emits a block, and
     # i3bar draws a separator around it — so a disconnected ethernet port shows
     # up as a stray '|' in the middle of the bar.
@@ -181,6 +206,8 @@ CLICK_ACTIONS = {
     ("volume", 3): ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
     ("volume", 4): ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"],
     ("volume", 5): ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%"],
+    # Clicking the theme indicator cycles dark -> light -> fly.
+    ("uimode", 1): [os.path.expanduser("~/.config/i3/scripts/ui-mode"), "cycle"],
     # The profile block cycles the profile, same as Super+p.
     ("read_file", 1): [os.path.expanduser(
         "~/.config/i3/scripts/cycle-power-profile")],
