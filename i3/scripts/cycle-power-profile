@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Cycle the ACPI platform profile — the Linux equivalent of Fn+Q on this Legion.
+#
+# Goes through power-profiles-daemon rather than writing
+# /sys/firmware/acpi/platform_profile directly, because PPD owns that file: it
+# also sets the intel_pstate energy_performance_preference (EPP) to match, which
+# is the knob that actually governs whether work lands on P-cores or E-cores.
+# Writing the sysfs file alone changes the platform profile and leaves EPP
+# pinned wherever it was — half the effect, and PPD will overwrite it anyway.
+#
+# PPD exposes three profiles (performance / balanced / power-saver), which map
+# onto the three modes Fn+Q cycles.
+
+set -eu
+
+command -v powerprofilesctl >/dev/null 2>&1 || {
+    command -v notify-send >/dev/null && notify-send "power-profiles-daemon not installed"
+    exit 1
+}
+
+current=$(powerprofilesctl get)
+case "$current" in
+    power-saver) next=balanced    ;;
+    balanced)    next=performance ;;
+    performance) next=power-saver ;;
+    *)           next=balanced    ;;
+esac
+
+powerprofilesctl set "$next"
+
+# Report the EPP too — it's the part that isn't visible anywhere else, and the
+# part that matters for battery.
+epp=$(cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference 2>/dev/null || echo "?")
+command -v notify-send >/dev/null && \
+    notify-send -t 2000 "Power profile: $next" "EPP: $epp"

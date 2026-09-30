@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+# Launch the preferred terminal, whichever of them exists on this machine.
+#
+# i3's config can't do fallbacks, and hardcoding one terminal means the config
+# breaks on a box where it isn't installed — you get a $mod+Return that silently
+# does nothing, with no terminal available to debug it from. So resolve here.
+#
+# Order is deliberate: Ghostty is the daily driver (same terminal as the Mac, and
+# the repo ships its terminfo), kitty is the installed fallback, and
+# x-terminal-emulator is the Debian alternatives system's answer — whatever that
+# points at will at least open.
+for t in ghostty kitty alacritty wezterm x-terminal-emulator xterm; do
+    if command -v "$t" >/dev/null 2>&1; then
+        exec "$t" "$@"
+    fi
+done
+# Nothing found. Say so somewhere visible rather than failing mutely.
+command -v notify-send >/dev/null 2>&1 && \
+    notify-send -u critical "No terminal found" "Install ghostty or kitty."
+exit 1

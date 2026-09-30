@@ -1,0 +1,87 @@
+# Managed by configs/system/legion.sh — narrow NOPASSWD allowlist.
+#
+# Installed to /etc/sudoers.d/10-fred-ops, mode 0440, root:root.
+#
+# ── WHAT IS DELIBERATELY NOT HERE, AND WHY ────────────────────────────
+# An allowlist is only meaningful if every entry is genuinely limited. These were
+# considered and rejected because each one is equivalent to full passwordless
+# root, which would make the allowlist security theatre:
+#
+#   apt / apt-get / dpkg   package scripts run arbitrary code as root
+#   systemctl              can start a unit you control, as root
+#   tee / dd / cp          arbitrary file write as root
+#   turbostat              `turbostat -- <cmd>` runs <cmd> as root
+#   fwupdmgr               flashes firmware
+#   visudo / chmod / chown can grant itself more
+#
+# So system/legion.sh still prompts for a password once. That is correct: it is a
+# one-time script that genuinely needs root, and the prompt is the only thing
+# standing between a compromised user session and permanent root.
+#
+# ── WHAT IS HERE ──────────────────────────────────────────────────────
+# powerprofilesctl — sets the ACPI platform profile and intel_pstate EPP. Its
+#   entire surface is "pick one of three named profiles"; it cannot write
+#   arbitrary paths or execute anything. Wanted without a prompt because it is
+#   used interactively ($mod+p, and the AC/battery udev rule).
+fred ALL=(root) NOPASSWD: /usr/bin/powerprofilesctl
+
+# tailscale — the CLI needs root to change node state (`up --ssh`, `set`). It
+#   cannot write arbitrary files or run arbitrary commands, and any state change
+#   still has to be authorised against the tailnet.
+fred ALL=(root) NOPASSWD: /usr/bin/tailscale
+
+# dmidecode — read-only hardware inventory (RAM slots, board, BIOS). Restricted
+#   to EXACTLY two arguments so `--dump-bin <path>`, which would be an arbitrary
+#   root file write, cannot be appended: sudoers' `*` matches a single argument,
+#   so `-t memory --dump-bin /etc/shadow` (four arguments) does not match.
+fred ALL=(root) NOPASSWD: /usr/sbin/dmidecode -t *
+
+# dmesg — the kernel ring buffer. Root-only on Ubuntu because
+#   kernel.dmesg_restrict=1. Read-only in every practical sense: the worst it can
+#   do is `-C`, which clears the buffer. No file writes, no exec.
+fred ALL=(root) NOPASSWD: /usr/bin/dmesg
+
+# brightnessctl — writes only to the backlight sysfs node. Normally needs no root
+#   at all (the package ships a udev rule for the 'video' group), so this is
+#   belt-and-braces for when that rule isn't in effect.
+fred ALL=(root) NOPASSWD: /usr/bin/brightnessctl
+
+# lsof — read-only. Wanted because working out what is holding the dGPU awake
+#   (and therefore burning ~12 W) means looking at who has /dev/nvidia* open.
+fred ALL=(root) NOPASSWD: /usr/bin/lsof
+
+# rfcomm — Bluetooth serial. DANGEROUS unrestricted: `rfcomm listen` and
+#   `rfcomm watch` both take a command argument and RUN IT AS ROOT on connection,
+#   so a bare `/usr/bin/rfcomm` entry would be full passwordless root wearing a
+#   Bluetooth costume. Only the subcommands that cannot execute anything are
+#   listed, each pinned to a fixed argument count.
+#
+#   Verify the restriction actually holds after installing — `sudo -l` shows the
+#   effective rules, and `sudo rfcomm listen 0 1 /bin/sh` must be REFUSED:
+#       sudo -l | grep rfcomm
+#       sudo rfcomm listen 0 1 /bin/sh     # must print "not allowed"
+#
+#   You may not need this at all: blueman + the polkit agent handle pairing and
+#   reconnecting without sudo. Prefer that route where it works.
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm show *
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm release *
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind *
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind * *
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm bind * * *
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm connect *
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm connect * *
+fred ALL=(root) NOPASSWD: /usr/bin/rfcomm connect * * *
+
+# ── POWER MEASUREMENT: prefer a udev rule over sudo ───────────────────
+# turbostat is NOT listed. `turbostat -- <cmd>` runs <cmd> as root, so it cannot
+# be allowlisted safely without pinning exact arguments, and pinned arguments
+# rot the moment you want a different column.
+#
+# The better answer for routine power monitoring is to make the counters readable
+# without root at all, which legion.sh does with a udev rule:
+#   /sys/class/powercap/intel-rapl:*/energy_uj   → group-readable
+# That covers package power for scripts and status bars. Battery draw
+# (/sys/class/power_supply/BAT1/power_now) is already world-readable.
+#
+# When you do need turbostat's per-core detail, run it with a password prompt.
+# It is an interactive diagnostic, not something a status bar should invoke.

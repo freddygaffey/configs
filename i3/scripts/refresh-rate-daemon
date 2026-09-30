@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Match the panel refresh rate to the power source: high on AC, 60 Hz on
+# battery.
+#
+# Why this exists: this laptop's panel is 2560x1600 @ 165 Hz. Driving it at 165
+# costs several watts — a measurable chunk of a ~20 W light-use budget on a
+# 74.5 Wh pack. GNOME had no such feature either; it just left it at 165.
+#
+# Event-driven rather than polling: udev emits a power_supply event on every
+# AC plug/unplug, so we block on `udevadm monitor` instead of waking up on a
+# timer. One read at startup, then one per transition.
+#
+# i3 runs this from exec_always, so it re-runs on every i3 reload/restart. Kill
+# any previous instance first, or reloads accumulate daemons.
+
+set -u
+
+OUTPUT="${I3_PANEL_OUTPUT:-eDP-1}"
+RATE_AC="${I3_RATE_AC:-165.04}"
+RATE_BAT="${I3_RATE_BAT:-60.03}"
+
+# Per-machine overrides, if any. Not tracked in git.
+[ -r "$HOME/.config/i3/power.env" ] && . "$HOME/.config/i3/power.env"
+
+# Kill older copies of this script (exec_always re-runs us on reload).
+for pid in $(pgrep -f 'refresh-rate-daemon' 2>/dev/null); do
+    [ "$pid" = "$$" ] || kill "$pid" 2>/dev/null
+done
+
+on_ac() {
+    # Any power_supply of type Mains that is online means we're plugged in.
+    for ps in /sys/class/power_supply/*; do
+        [ -r "$ps/type" ] || continue
+        [ "$(cat "$ps/type")" = "Mains" ] || continue
+        [ "$(cat "$ps/online" 2>/dev/null)" = "1" ] && return 0
+    done
+    return 1
+}
+
+apply() {
+    local want
+    if on_ac; then want="$RATE_AC"; else want="$RATE_BAT"; fi
+    # Skip the modeset if we're already there — a redundant xrandr call flashes
+    # the screen and briefly confuses i3's workspace geometry.
+    local now
+    now=$(xrandr 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\*' | tr -d '*' | head -1)
+    [ "$now" = "$want" ] && return 0
+    xrandr --output "$OUTPUT" --rate "$want" 2>/dev/null
+}
+
+apply
+# --property so we also get events that only change an attribute (online 1→0).
+udevadm monitor --udev --subsystem-match=power_supply 2>/dev/null | while read -r _; do
+    # Debounce: a single plug event emits several udev lines.
+    sleep 1
+    apply
+done

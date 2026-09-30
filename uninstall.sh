@@ -36,6 +36,12 @@ unlink_restore() {
 unlink_restore "$HOME/.config/nvim"
 unlink_restore "$HOME/.config/tmux/tmux.conf"
 unlink_restore "$HOME/.config/shell/prompt.sh"
+# Desktop layer (bootstrap-desktop.sh). Harmless on a box that never had it —
+# unlink_restore is a no-op when the link doesn't exist.
+unlink_restore "$HOME/.config/i3/config"
+unlink_restore "$HOME/.config/i3/i3status.conf"
+unlink_restore "$HOME/.config/i3/scripts"
+unlink_restore "$HOME/.config/ghostty/config"
 
 # Take the git-prompt source line (and its comment) back out of the shell rc
 # files — the bootstrap appended it there. Rewrites the file in place so the

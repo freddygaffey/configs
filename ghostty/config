@@ -1,0 +1,88 @@
+# Ghostty — shared by the Mac and the Linux box. Symlinked to
+# ~/.config/ghostty/config by bootstrap-desktop.sh (Linux) or by hand on macOS.
+#
+# The point of tracking this: the terminal was the last hand-configured thing in
+# an otherwise scripted setup, and it's the one program running on both machines.
+# One file, same behaviour, same keybindings, both ends of every ssh session.
+
+# ── Font ───────────────────────────────────────────────────────────────
+# JetBrains Mono is packaged on Ubuntu (fonts-jetbrains-mono) and available via
+# brew on macOS, so the same name resolves on both.
+font-family = JetBrains Mono
+font-size = 11
+# Ghostty synthesises a bold face if the family lacks one; JetBrains Mono has
+# real bold, so leave synthesis off.
+font-synthetic-style = false
+
+# ── Colours — carbonfox, matching tmux and nvim ────────────────────────
+# Set explicitly rather than via `theme =` so it can't drift if Ghostty renames
+# or restyles a bundled theme.
+background = 161616
+foreground = f2f4f8
+cursor-color = 78a9ff
+selection-background = 2a2a2a
+selection-foreground = f2f4f8
+
+# carbonfox palette (0-7 normal, 8-15 bright)
+palette = 0=#161616
+palette = 1=#ee5396
+palette = 2=#25be6a
+palette = 3=#08bdba
+palette = 4=#78a9ff
+palette = 5=#be95ff
+palette = 6=#33b1ff
+palette = 7=#dfdfe0
+palette = 8=#6b6b6b
+palette = 9=#f16da6
+palette = 10=#46c880
+palette = 11=#2dc7c4
+palette = 12=#8cb6ff
+palette = 13=#c8a5ff
+palette = 14=#52bdff
+palette = 15=#f2f4f8
+
+# ── Window ─────────────────────────────────────────────────────────────
+window-padding-x = 8
+window-padding-y = 6
+# Padding colour follows the background, so the gutter doesn't read as a border.
+window-padding-balance = true
+window-decoration = true
+# No confirmation on close: tmux holds the session, so closing a window loses
+# nothing. The prompt is pure friction in a tmux-centric setup.
+confirm-close-surface = false
+
+# ── Clipboard ──────────────────────────────────────────────────────────
+# Writes are allowed so OSC 52 from nvim/tmux inside an ssh session lands in the
+# *local* clipboard — this is the whole reason the tmux config sets
+# `set-clipboard on` and `allow-passthrough on`.
+clipboard-write = allow
+# Reads stay gated: a remote process being able to *read* your clipboard without
+# asking is a genuine exfiltration path, and almost nothing legitimately needs it.
+clipboard-read = ask
+# Don't auto-copy on select — it clobbers the clipboard while you're merely
+# reading, and tmux's own copy-mode (prefix v / y) is the intended path.
+copy-on-select = false
+
+# ── Shell integration ──────────────────────────────────────────────────
+# Gives Ghostty cwd tracking (new windows open in the same directory) and
+# prompt-aware scrolling. `detect` so it doesn't fight a shell rc that already
+# sets it up.
+shell-integration = detect
+shell-integration-features = cursor,sudo,title
+
+# ── Keybindings ────────────────────────────────────────────────────────
+# Deliberately sparse. tmux owns splits, tabs and navigation — duplicating them
+# here means two layers competing for the same chords, and the tmux ones are the
+# ones that work over ssh. These are only the things tmux cannot do.
+keybind = ctrl+shift+c=copy_to_clipboard
+keybind = ctrl+shift+v=paste_from_clipboard
+keybind = ctrl+shift+plus=increase_font_size:1
+keybind = ctrl+shift+minus=decrease_font_size:1
+keybind = ctrl+shift+zero=reset_font_size
+keybind = ctrl+shift+r=reload_config
+
+# ── macOS-only niceties (ignored on Linux) ─────────────────────────────
+# Left Option as Alt so nvim's Alt maps work; right Option kept for typing
+# accented characters.
+macos-option-as-alt = left
+macos-titlebar-style = tabs

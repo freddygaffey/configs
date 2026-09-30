@@ -1,7 +1,8 @@
 # configs
 
 My terminal environment: **tmux + Neovim**, vim bindings throughout, carbonfox
-theme, one-command setup. Works on macOS and Linux servers.
+theme, one-command setup. Works on macOS and Linux servers — plus an optional
+**i3** desktop layer for Linux workstations.
 
 ## Setup on a new machine
 
@@ -14,6 +15,14 @@ normal machine.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap.sh | bash
+```
+
+**Desktop** — everything in Full, plus i3, Ghostty and the programs a bare WM
+needs (launcher, locker, notifications, network/Bluetooth applets, polkit agent).
+Linux + apt only; refuses to run on a server without a display.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/freddygaffey/configs/main/bootstrap-desktop.sh | bash
 ```
 
 **Lite** — for tiny boxes (512 MB / 1 vCPU). Skips the build toolchain and links
@@ -43,6 +52,12 @@ Already have the repo cloned? Run the script directly instead:
 | `lite/init.lua`     | Neovim — pure-Lua subset, no treesitter/LSP, no builds |
 | `tmux/tmux.conf`    | tmux — vim bindings, carbonfox statusline              |
 | `shell/prompt.sh`   | zsh/bash prompt — user@host, path, git branch           |
+| [`bootstrap-desktop.sh`](bootstrap-desktop.sh) | i3 desktop layer (Linux/apt)     |
+| `i3/config`         | i3 — upstream default as a base, Super as mod, hjkl nav |
+| `i3/i3status.conf`  | i3 bar — power profile, temp, load, battery draw in W   |
+| `i3/scripts/`       | terminal resolver, refresh-rate-on-power, profile cycle |
+| `ghostty/config`    | Ghostty — shared by the Mac and the Linux box           |
+| [`system/`](system/) | Host-level config. **Not** run by any bootstrap        |
 
 ## Removing it
 
@@ -120,3 +135,34 @@ tmux prefix = **`Ctrl-a`**.  nvim leader = **`Space`**.
 
 Linux clipboard needs `xclip` (X11) or `wl-clipboard` (Wayland); macOS uses the
 built-in `pbcopy`. tmux auto-detects which.
+
+## Three layers, deliberately separate
+
+| Layer | Script | Touches | Safe to `curl | bash` anywhere? |
+|---|---|---|---|
+| Terminal | `bootstrap.sh` / `bootstrap-lite.sh` | `$HOME`, packages | yes |
+| Desktop | `bootstrap-desktop.sh` | `$HOME`, packages | yes (refuses non-desktop) |
+| Host | `system/legion.sh` | `/etc`, systemd units, sysfs | **no — one specific laptop** |
+
+The split is the point. The first two only ever symlink into `$HOME` and install
+packages, so they are safe on any box. `system/legion.sh` disables suspend, adds
+udev rules and masks services — correct for one laptop, actively wrong on a
+server. It is never invoked by a bootstrap script; you run it deliberately, and
+it has a `--dry-run`.
+
+## i3 notes
+
+Based on i3's upstream default config, with the deviations documented at the top
+of `i3/config`. The short version:
+
+| | Upstream | Here | Why |
+|---|---|---|---|
+| `$mod` | Alt | **Super** | Alt belongs to nvim |
+| Direction keys | `j k l ;` | **`h j k l`** | matches tmux and nvim |
+| Launcher | dmenu | **rofi** | also does window switching |
+| Compositor | none | none | costs battery on a hybrid GPU for unused transparency |
+
+i3 installs alongside GNOME as a login-screen option; GNOME stays the default
+until you pick otherwise. Everything GNOME did implicitly is wired up explicitly
+in `i3/config` — brightness, locking, notifications, network and Bluetooth
+applets, a polkit agent — because i3 provides none of it.
