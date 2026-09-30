@@ -2,7 +2,7 @@
 #
 # zsh (the Mac) — the themed prompt: user@host, path, branch, carbonfox colours.
 #
-#   fred@freds-mac:~/art_move (master)%
+#   fred@freds-mac:~/someting (master)%
 #
 # bash (the Debian boxes) — your distro prompt is left exactly as it is. The
 # branch is inserted in front of its trailing "$ " and nothing else is touched:
