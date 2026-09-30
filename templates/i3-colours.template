@@ -29,7 +29,13 @@ bar {
     colors {
         # panel, not bg: i3bar has no border option, so the only way to separate
         # the bar from the windows below it is to make it a different shade.
-        background @ui_panel@
+        #
+        # The e6 suffix is alpha (90%), so the wallpaper shows faintly through
+        # rather than the bar cutting a hard band across it. i3bar accepts
+        # 8-digit RGBA, but it only means anything with a compositor running —
+        # and picom must not have an opacity-rule forcing i3bar to 100, which it
+        # did until now.
+        background @ui_panel@e6
         statusline @ui_fg@
         # dim, NOT panel: the bar's background is panel, so a panel-coloured
         # separator is invisible and the blocks read as one padded run of text
