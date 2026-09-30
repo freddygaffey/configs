@@ -56,10 +56,16 @@ set_dir() {
 }
 
 # Sorted so "next" and "prev" are stable between runs.
+#
+# find -L, so SYMLINKS COUNT. Without -L a symlink is -type l, not -type f, and
+# a directory of links into a master image folder would come back empty with no
+# error — which is the obvious way to organise this (one real folder, linked into
+# dark/ and light/), so it has to work. -L also drops broken links for free,
+# since they resolve to nothing.
 list() {
     dir=$(set_dir)
     [ -d "$dir" ] || return 0
-    find "$dir" -maxdepth 1 -type f \
+    find -L "$dir" -maxdepth 1 -type f \
         \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
            -o -iname '*.webp' -o -iname '*.bmp' \) 2>/dev/null | sort
 }
@@ -87,13 +93,17 @@ current() { [ -r "$STATE" ] && cat "$STATE" || echo ""; }
 
 # Index of the current image in the list, or 0 if it is not in there (which
 # happens after a mode switch, since the directory changes).
+#
+# grep rather than a read loop: piping into `while` puts the loop in a SUBSHELL,
+# so a `return` inside it only leaves the subshell. The original printed the
+# index it found AND then fell through to the trailing `echo 0`, yielding "1\n0"
+# — which broke the arithmetic in step() and tripped set -e, so `next` failed
+# silently and no wallpaper was ever set.
 index_of() {
-    target="$1"; i=0
-    list | while IFS= read -r f; do
-        i=$((i + 1))
-        [ "$f" = "$target" ] && { echo "$i"; return 0; }
-    done
-    echo 0
+    target="$1"
+    [ -n "$target" ] || { echo 0; return 0; }
+    n=$(list | grep -nxF -- "$target" 2>/dev/null | head -1 | cut -d: -f1)
+    echo "${n:-0}"
 }
 
 step() {
