@@ -55,10 +55,22 @@ exec --no-startup-id sh -c 'command -v dex >/dev/null && dex --autostart --envir
 # `loginctl lock-session` and lid-close both reach i3lock. (Upstream default.)
 exec --no-startup-id sh -c 'command -v xss-lock >/dev/null && xss-lock --transfer-sleep-lock -- $lock'
 
-# NetworkManager tray applet (upstream default). This machine is WiFi-only and
-# i3 has no network UI whatsoever — without this there is no graphical way to
-# join a network. `nmtui` in a terminal is the fallback.
+# Network and Bluetooth tray applets.
+#
+# These live in the tray, which means i3bar decides their position and we do not:
+# the tray is always drawn rightmost, and icons appear in whatever order the
+# applets happen to claim the systray — startup timing, effectively. That is why
+# Bluetooth kept landing between Bitwarden and Discord.
+#
+# The alternative is status blocks in the bar, whose order IS ours to choose, but
+# which then sit to the LEFT of the tray rather than at the far right. You can
+# have position control or the tray, not both. A bar that speaks StatusNotifier
+# (polybar, waybar) treats tray icons as orderable modules and can do both.
+#
+# i3/scripts/wifi-menu is a rofi network picker if you ever want it on a key
+# instead.
 exec --no-startup-id sh -c 'command -v nm-applet >/dev/null && nm-applet'
+exec --no-startup-id sh -c 'command -v blueman-applet >/dev/null && blueman-applet'
 
 # Bluetooth tray. Not upstream, but this box pairs a mouse, keyboard and
 # SpaceMouse over BT; `bluetoothctl` is a poor substitute for reconnecting them.
@@ -174,6 +186,7 @@ bindsym $mod+Shift+b exec --no-startup-id firefox
 
 # Bluetooth — see the blueman note above for why it is not in the tray.
 bindsym $mod+Ctrl+b exec --no-startup-id blueman-manager
+bindsym $mod+n      exec --no-startup-id ~/.config/i3/scripts/wifi-menu
 
 # Wallpaper: next / random. Images live in ~/Pictures/Wallpapers/{dark,light},
 # and which directory is used follows the UI mode.

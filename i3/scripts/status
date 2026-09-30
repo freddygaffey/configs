@@ -160,8 +160,7 @@ def iconify_wifi(block):
     """Replace the word "wifi" with the glyph, and merge this block visually
     with the bluetooth one that follows by suppressing the separator between
     them — the two radios read as one control, not two readings."""
-    text = block.get("full_text", "")
-    block["full_text"] = text.replace("wifi", WIFI_ICON).strip()
+    block["full_text"] = WIFI_ICON
     block["separator"] = False
     block["separator_block_width"] = 12
 
@@ -225,16 +224,6 @@ def transform(blocks):
         colour_gpu(block)
         blocks.insert(index + 1, block)
 
-    # Bluetooth beside wifi and volume, so the system indicators sit together.
-    bt = bt_block()
-    if bt is not None:
-        anchor = next((i for i, b in enumerate(blocks)
-                       if b.get("name") == "wireless"), None)
-        if anchor is None:
-            anchor = next((i for i, b in enumerate(blocks)
-                           if b.get("name") == "volume"), len(blocks) - 2)
-        blocks.insert(anchor + 1, bt)
-
     # Theme indicator next to the clock, at the far left.
     mode = ui_mode_block()
     if mode is not None:
@@ -274,7 +263,9 @@ CLICK_ACTIONS = {
     ("volume", 1): toggle("pavucontrol", "pavucontrol"),
     # The system indicators open their own managers, which is what the tray
     # icons used to be for.
-    ("wireless", 1): toggle("nm-connection-editor", "nm-connection-editor"),
+    # A rofi dropdown of networks, not a settings window — this replaces
+    # nm-applet, whose tray icon never appeared under i3 at all.
+    ("wireless", 1): [os.path.expanduser("~/.config/i3/scripts/wifi-menu")],
     ("bluetooth", 1): toggle("blueman-manager", "blueman-manager"),
     ("battery", 1): toggle("gnome-power-statistics", "gnome-power-statistics"),
     # Volume is the one block where scrolling is the obvious gesture.

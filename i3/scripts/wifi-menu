@@ -1,0 +1,83 @@
+#!/usr/bin/env sh
+# A wifi picker, as a rofi dropdown.
+#
+# Replaces nm-applet. The applet's tray icon never appeared at all under i3:
+# nm-applet links libayatana-appindicator and publishes via StatusNotifier, while
+# i3bar's tray only speaks XEmbed. So it sat there invisible while its own
+# dropdown was unreachable.
+#
+# Lists networks WITHOUT rescanning by default. `nmcli dev wifi list` triggers a
+# scan and takes ~3.7s before drawing anything; --rescan no reads the cached list
+# and is instant. Rescan is offered as an explicit menu entry instead, so the
+# wait only happens when you ask for it.
+
+set -eu
+
+MENU="rofi -dmenu -i -no-custom -p wifi"
+PASS_MENU="rofi -dmenu -password -p password"
+
+command -v nmcli >/dev/null 2>&1 || { notify-send "nmcli not installed"; exit 1; }
+command -v rofi  >/dev/null 2>&1 || { notify-send "rofi not installed"; exit 1; }
+
+list_networks() {
+    # ACTIVE:SSID:SIGNAL:SECURITY, strongest first, blanks and duplicates dropped.
+    nmcli -t -f ACTIVE,SSID,SIGNAL,SECURITY device wifi list --rescan "${1:-no}" 2>/dev/null \
+      | awk -F: '$2 != "" { if (!seen[$2]++) printf "%s\t%s\t%s\t%s\n", $1, $2, $3, $4 }' \
+      | sort -t"$(printf '\t')" -k3 -rn \
+      | awk -F"$(printf '\t')" '{
+            mark = ($1 == "yes") ? "*" : " "
+            sec  = ($4 == "") ? "open" : $4
+            printf "%s %-28s %3s%%  %s\n", mark, $2, $3, sec
+        }'
+}
+
+ssid_from_line() {
+    # Strip the leading marker, then take everything up to the padded columns.
+    printf '%s' "$1" | sed -e 's/^[* ] //' -e 's/  *[0-9]\{1,3\}%.*$//' -e 's/ *$//'
+}
+
+connect() {
+    ssid="$1"
+    # An existing saved connection knows its own password; only prompt if there
+    # is not one, otherwise every reconnect would ask.
+    if nmcli -t -f NAME connection show 2>/dev/null | grep -qxF "$ssid"; then
+        nmcli connection up id "$ssid" >/dev/null 2>&1 && ok=1 || ok=0
+    else
+        if printf '%s' "$2" | grep -qi 'wpa\|wep\|802'; then
+            password=$($PASS_MENU) || exit 0
+            nmcli device wifi connect "$ssid" password "$password" >/dev/null 2>&1 && ok=1 || ok=0
+        else
+            nmcli device wifi connect "$ssid" >/dev/null 2>&1 && ok=1 || ok=0
+        fi
+    fi
+
+    if [ "$ok" = 1 ]; then
+        notify-send -t 2500 -h string:x-dunst-stack-tag:wifi "Connected" "$ssid"
+    else
+        notify-send -t 4000 -u critical -h string:x-dunst-stack-tag:wifi \
+                    "Could not connect" "$ssid"
+    fi
+}
+
+rescan="${1:-}"
+networks=$(list_networks "$([ "$rescan" = --rescan ] && echo yes || echo no)")
+
+choice=$(printf '%s\n%s\n%s\n%s\n' \
+            "$networks" "  ── rescan" "  ── disconnect" "  ── editor" \
+         | $MENU) || exit 0
+
+case "$choice" in
+    *"── rescan")     exec "$0" --rescan ;;
+    *"── disconnect")
+        device=$(nmcli -t -f DEVICE,TYPE device | awk -F: '$2=="wifi"{print $1; exit}')
+        nmcli device disconnect "$device" >/dev/null 2>&1
+        notify-send -t 2000 -h string:x-dunst-stack-tag:wifi "Wi-Fi disconnected"
+        ;;
+    *"── editor")     exec nm-connection-editor ;;
+    "")              exit 0 ;;
+    *)
+        ssid=$(ssid_from_line "$choice")
+        security=$(printf '%s' "$choice" | sed 's/.*%  //')
+        [ -n "$ssid" ] && connect "$ssid" "$security"
+        ;;
+esac
