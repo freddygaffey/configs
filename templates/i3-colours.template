@@ -11,9 +11,12 @@
 # has no way to include a fragment into an existing block.
 
 #                       border   background  text    indicator  child_border
+# child_border is the visible edge. Focused gets the accent, unfocused gets the
+# panel shade — a deliberately large step, since with no compositor this border
+# is the only indication of which window has focus.
 client.focused          @accent@ @accent@    @bg@    @accent@   @accent@
 client.focused_inactive @panel@  @panel@     @fg@    @panel@    @panel@
-client.unfocused        @bg@     @bg@        @dim@   @bg@       @panel@
+client.unfocused        @panel@  @bg@        @dim@   @bg@       @panel@
 client.urgent           @urgent@ @urgent@    @bg@    @urgent@   @urgent@
 
 bar {
