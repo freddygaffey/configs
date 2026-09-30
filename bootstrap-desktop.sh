@@ -174,6 +174,17 @@ link "$DOTFILES/kitty/kitty.conf" "$HOME/.config/kitty/kitty.conf"
 
 chmod +x "$DOTFILES"/i3/scripts/* 2>/dev/null || true
 
+# ── 4b. Seed the generated theme files ─────────────────────────────────
+# i3's colours and the whole bar block are generated per UI mode from
+# templates/ + themes/. Without ~/.config/i3/colours.conf there is no bar at
+# all, so render it once here. Also seeds kitty's theme and dunst's config,
+# which are generated the same way.
+if [ -x "$DOTFILES/i3/scripts/ui-mode" ]; then
+  info "Seeding theme files (dark)…"
+  UI_MODE_REPO="$DOTFILES" "$DOTFILES/i3/scripts/ui-mode" dark >/dev/null 2>&1 \
+    || warn "ui-mode seed failed — run ./i3/scripts/ui-mode dark yourself"
+fi
+
 # ── 5. Reload a running i3, if there is one ────────────────────────────
 if command -v i3-msg >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
   i3-msg reload >/dev/null 2>&1 && info "reloaded running i3" || true

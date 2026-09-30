@@ -4,44 +4,82 @@
 #   ui-mode dark     everything dark
 #   ui-mode light    light apps, dark terminal and editor — reading and browsing
 #                    without the terminal turning into a lamp
-#   ui-mode fly       everything light, including terminal and editor — for
+#   ui-mode fly      everything light, terminal and editor included — for
 #                    working outdoors in glare
 #   ui-mode cycle    dark -> light -> fly -> dark
 #   ui-mode status   print the current mode
 #
-# "light" is the awkward one and the reason this exists at all: it is why the
-# usual trick of following the system colour scheme does not work. GTK apps and
-# the terminal have to disagree, so each is set explicitly.
+# "light" is the awkward one and the reason this exists: GTK apps and the
+# terminal have to disagree, so "follow the system colour scheme" cannot express
+# it and each surface is set explicitly.
 #
-# Applies to running programs where it can, so a switch is immediate:
-#   GTK    gsettings, picked up live by running apps
-#   kitty  `kitty @ set-colors` repaints open windows
-#   nvim   :colorscheme pushed to every running instance over its RPC socket
+# ── How colours are defined ────────────────────────────────────────────
+# Each palette is written down EXACTLY ONCE, in themes/<name>.env. Every app's
+# config is rendered from it through templates/*.template, so a hex value never
+# appears in two places and the apps cannot drift apart.
 #
-# i3 itself is not recoloured. Its palette cannot be swapped without a restart:
-# i3's `include` does not expose the included file's variables to the including
-# file, so a split-out palette leaves every colour unparsed.
+#   themes/carbonfox.env     the dark palette
+#   themes/dayfox.env        the light palette
+#   templates/*.template     one per app, using @key@ placeholders
+#
+# Adding a theme is one new themes/*.env file. Adding an app is one new
+# template plus a line in render_all().
+#
+# nvim is the exception: it loads a colorscheme by name rather than being handed
+# colours, so the palette's name= field is passed through instead.
+#
+# ── What updates live ──────────────────────────────────────────────────
+#   GTK      gsettings, picked up by running apps immediately
+#   browsers via the XDG portal's org.freedesktop.appearance (see the portals
+#            note in the README) — Firefox, Chrome and Electron follow it
+#   kitty    `kitty @ set-colors` repaints open windows
+#   nvim     :colorscheme pushed to every running instance over its RPC socket
+#   dunst    killed; D-Bus activation restarts it on the next notification
+#   i3       `i3-msg restart`, which re-reads the config and keeps your layout
 
 set -eu
 
-MODE_FILE="$HOME/.config/ui-mode"
-THEME_FILE="$HOME/.config/ui-theme"     # read by nvim at startup
-KITTY_THEME="$HOME/.config/kitty/theme.conf"
 REPO="${UI_MODE_REPO:-$HOME/.dotfiles/configs}"
+MODE_FILE="$HOME/.config/ui-mode"
+THEME_FILE="$HOME/.config/ui-theme"          # read by nvim at startup
 
 usage() { echo "usage: ui-mode dark|light|fly|cycle|status" >&2; exit 1; }
-
 current() { [ -r "$MODE_FILE" ] && cat "$MODE_FILE" || echo dark; }
 
-# ── the three modes, as data ───────────────────────────────────────────
-# gtk_theme  colour_scheme  kitty_theme  nvim_theme
+# mode -> gtk_theme  colour_scheme  palette
+#
+# i3, the terminal and nvim all follow the palette; only GTK differs between
+# dark and light. That is exactly what "light mode with a dark terminal" means.
 settings_for() {
     case "$1" in
-        dark)  echo "Yaru-dark prefer-dark  theme-dark.conf  carbonfox" ;;
-        light) echo "Yaru      prefer-light theme-dark.conf  carbonfox" ;;
-        fly)   echo "Yaru      prefer-light theme-light.conf dawnfox"   ;;
+        dark)  echo "Yaru-dark prefer-dark  carbonfox" ;;
+        light) echo "Yaru      prefer-light carbonfox" ;;
+        fly)   echo "Yaru      prefer-light dayfox"    ;;
         *)     usage ;;
     esac
+}
+
+# render <template> <palette> <destination>
+#
+# Substitutes @key@ for each KEY=VALUE in the palette. Built as a single sed
+# script rather than one pass per key, so the file is read and written once.
+render() {
+    template="$1"; palette="$2"; dest="$3"
+    [ -r "$template" ] && [ -r "$palette" ] || return 0
+
+    script=$(
+        while IFS='=' read -r key value; do
+            case "$key" in ''|\#*) continue ;; esac
+            printf 's|@%s@|%s|g\n' "$key" "$value"
+        done < "$palette"
+    )
+
+    mkdir -p "$(dirname "$dest")"
+    sed "$script" "$template" > "$dest"
+}
+
+palette_value() {   # palette_value <palette> <key>
+    sed -n "s/^$2=//p" "$1" | head -1
 }
 
 apply_gtk() {
@@ -51,36 +89,55 @@ apply_gtk() {
 }
 
 apply_kitty() {
-    src="$REPO/kitty/$1"
-    [ -r "$src" ] || return 0
-    # New windows read this on startup.
-    cp "$src" "$KITTY_THEME"
-
-    # Running windows get repainted. kitty appends its pid to the socket name
-    # from `listen_on`, so the configured "@mykitty" never exists as-is — the
-    # real sockets are @mykitty-1234. Enumerate them from /proc/net/unix.
     command -v kitty >/dev/null 2>&1 || return 0
+    # NB not named "theme": sh has no local variables, so that would clobber the
+    # caller's $theme — which it did, and the status line printed a path.
+    kitty_theme="$HOME/.config/kitty/theme.conf"
+    [ -r "$kitty_theme" ] || return 0
+
+    # Repaint open windows. kitty appends its pid to the socket name from
+    # `listen_on`, so the configured "@mykitty" never exists as such — the real
+    # sockets are @mykitty-1234, and have to be found in /proc/net/unix.
     awk '{print $NF}' /proc/net/unix 2>/dev/null \
-      | grep '^@mykitty' \
-      | sort -u \
+      | grep '^@mykitty' | sort -u \
       | while read -r sock; do
-            kitty @ --to "unix:$sock" set-colors --all "$src" >/dev/null 2>&1 || true
+            kitty @ --to "unix:$sock" set-colors --all "$kitty_theme" >/dev/null 2>&1 || true
         done
 }
 
 apply_nvim() {
-    theme="$1"
-    printf '%s\n' "$theme" > "$THEME_FILE"
+    printf '%s\n' "$1" > "$THEME_FILE"
+    command -v nvim >/dev/null 2>&1 || return 0
 
     # Push to anything already open. nvim always listens on a socket under
     # XDG_RUNTIME_DIR, so no --listen flag is needed.
-    command -v nvim >/dev/null 2>&1 || return 0
     runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
     for sock in "$runtime"/nvim.*; do
         [ -S "$sock" ] || continue
         nvim --server "$sock" --remote-expr \
-             "execute('silent! colorscheme $theme')" >/dev/null 2>&1 || true
+             "execute('silent! colorscheme $1')" >/dev/null 2>&1 || true
     done
+}
+
+apply_dunst() {
+    # dunst 1.9 has no reload command, but it is D-Bus activated: killing it
+    # means the next notification starts a fresh one with the new config.
+    pkill -x dunst >/dev/null 2>&1 || true
+}
+
+apply_i3() {
+    # restart, not reload: colours are only read at config parse time. restart
+    # re-reads the config and keeps the layout and windows exactly as they are.
+    command -v i3-msg >/dev/null 2>&1 && i3-msg restart >/dev/null 2>&1 || true
+}
+
+render_all() {
+    palette="$REPO/themes/$1.env"
+    [ -r "$palette" ] || { echo "no such theme: $1" >&2; exit 1; }
+    render "$REPO/templates/i3-colours.template"  "$palette" "$HOME/.config/i3/colours.conf"
+    render "$REPO/templates/kitty-theme.template" "$palette" "$HOME/.config/kitty/theme.conf"
+    render "$REPO/templates/dunstrc.template"     "$palette" "$HOME/.config/dunst/dunstrc"
+    palette_value "$palette" name
 }
 
 mode="${1:-}"
@@ -98,12 +155,16 @@ case "$mode" in
 esac
 
 set -- $(settings_for "$mode")
-apply_gtk "$1" "$2"
-apply_kitty "$3"
-apply_nvim "$4"
+gtk_theme="$1"; colour_scheme="$2"; theme="$3"
 
+nvim_theme=$(render_all "$theme")
+apply_gtk "$gtk_theme" "$colour_scheme"
+apply_kitty
+apply_nvim "${nvim_theme:-$theme}"
+apply_dunst
+
+# Written before the i3 restart: the restart replaces this process's parent, so
+# anything after it may not run.
 printf '%s\n' "$mode" > "$MODE_FILE"
-
-command -v notify-send >/dev/null 2>&1 && \
-    notify-send -t 1200 -h string:x-dunst-stack-tag:uimode "UI mode: $mode" || true
-echo "ui-mode: $mode"
+echo "ui-mode: $mode ($theme)"
+apply_i3

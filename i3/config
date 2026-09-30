@@ -89,24 +89,19 @@ exec_always --no-startup-id ~/.config/i3/scripts/refresh-rate-daemon
 # away a model that took seconds to load.
 exec --no-startup-id sh -c '[ -x "$HOME/lyrebird/.venv/bin/python" ] && cd "$HOME/lyrebird" && exec ./.venv/bin/python src/dictate.py --daemon'
 
-# ── Look — carbonfox, matching tmux/nvim ───────────────────────────────
-# Deliberately inline. Splitting the palette into an included file does not work:
-# i3's `include` does not make the included file's variables visible to the
-# including file, so every client.* and bar colour came back as "Could not parse
-# color: $accent". i3 colours therefore stay fixed, and ui-mode recolours GTK,
-# the terminal and nvim instead — which is where the screen area actually is.
-set $bg      #161616
-set $fg      #f2f4f8
-set $accent  #78a9ff
-set $dim     #6b6b6b
-set $urgent  #ee5396
-set $panel   #2a2a2a
-
-#                       border   background  text   indicator  child_border
-client.focused          $accent  $accent     $bg    $accent    $accent
-client.focused_inactive $panel   $panel      $fg    $panel     $panel
-client.unfocused        $bg      $bg         $dim   $bg        $panel
-client.urgent           $urgent  $urgent     $bg    $urgent    $urgent
+# ── Look ───────────────────────────────────────────────────────────────
+# Window colours and the whole bar block are generated per UI mode into
+# ~/.config/i3/colours.conf by i3/scripts/ui-mode, from i3/colours.template plus
+# one of i3/palette-*.env.
+#
+# Generated rather than included-with-variables because i3's `include` does not
+# expose the included file's variables to the including file — a `set $bg` there
+# leaves every colour as "Could not parse color: $bg". Literal hex crosses the
+# boundary fine, hence the template.
+#
+# If this file is missing you get no bar at all, so bootstrap-desktop.sh seeds it
+# by running `ui-mode dark` once.
+include ~/.config/i3/colours.conf
 
 # i3 4.22+ has gaps built in (no i3-gaps fork needed). Modest, not decorative.
 gaps inner 6
@@ -123,6 +118,9 @@ tiling_drag modifier titlebar
 bindsym $mod+Return exec --no-startup-id $term
 bindsym $mod+Shift+q kill
 bindsym $mod+d exec --no-startup-id rofi -show drun
+# File manager. nautilus is GNOME Files; it is already installed with the
+# desktop, so no extra package.
+bindsym $mod+Shift+f exec --no-startup-id nautilus --new-window
 bindsym $mod+Tab exec --no-startup-id rofi -show window
 
 # Focus
@@ -365,27 +363,3 @@ bindsym $mod+Shift+r restart
 bindsym $mod+Ctrl+q exec --no-startup-id $lock
 bindsym $mod+Shift+e exec --no-startup-id i3-nagbar -t warning \
     -m 'Exit i3?' -B 'Exit' 'i3-msg exit'
-
-# ── Bar ────────────────────────────────────────────────────────────────
-bar {
-    # Wrapped rather than calling i3status directly: i3status has no "run this
-    # command" module, so scripts/status splices a GPU block into its JSON,
-    # colour-codes load, and compacts the units.
-    status_command ~/.config/i3/scripts/status ~/.config/i3/i3status.conf
-    position top
-    # Smaller than i3's own 11pt font: the bar holds a lot of readings and this
-    # is the cheapest way to fit more without shortening them further.
-    font pango:JetBrains Mono 9
-    tray_output primary
-    separator_symbol " | "
-    colors {
-        background $bg
-        statusline $fg
-        separator  $panel
-        #                  border   background  text
-        focused_workspace  $accent  $accent     $bg
-        active_workspace   $panel   $panel      $fg
-        inactive_workspace $bg      $bg         $dim
-        urgent_workspace   $urgent  $urgent     $bg
-    }
-}

@@ -56,7 +56,10 @@ Already have the repo cloned? Run the script directly instead:
 | `i3/config`         | i3 — upstream default as a base, Super as mod, hjkl nav |
 | `i3/i3status.conf`  | i3 bar — power profile, temp, load, battery draw in W   |
 | `i3/scripts/`       | terminal resolver, refresh-rate-on-power, profile cycle |
-| `ghostty/config`    | Ghostty — shared by the Mac and the Linux box           |
+| `kitty/kitty.conf`  | kitty — the terminal, shared with the Mac               |
+| `ghostty/config`    | Ghostty — kept as the fallback terminal                 |
+| `themes/*.env`      | Colour palettes. Each one defined **once**              |
+| `templates/*.template` | Per-app configs rendered from a palette              |
 | [`system/`](system/) | Host-level config. **Not** run by any bootstrap        |
 
 ## Removing it
@@ -186,3 +189,57 @@ i3 installs alongside GNOME as a login-screen option; GNOME stays the default
 until you pick otherwise. Everything GNOME did implicitly is wired up explicitly
 in `i3/config` — brightness, locking, notifications, network and Bluetooth
 applets, a polkit agent — because i3 provides none of it.
+
+## UI modes
+
+`Super+Shift+t` cycles dark → light → fly.
+
+| Mode | GTK apps, browsers | Terminal, nvim, i3, dunst |
+|---|---|---|
+| `dark` | dark | dark |
+| `light` | light | dark |
+| `fly` | light | light — for glare outdoors |
+
+`light` is why this exists: GTK and the terminal have to disagree, so "follow the
+system colour scheme" cannot express it.
+
+**Colours are defined once.** Each palette lives in `themes/<name>.env` and
+nothing else contains a hex value — `i3/scripts/ui-mode` renders every app's
+config from it through `templates/*.template`. Adding a theme is one new `.env`
+file; adding an app is one template plus a line in `render_all()`.
+
+nvim is the exception: it loads a colorscheme by name rather than being handed
+colours, so the palette's `name=` is passed through, and both nvim configs read
+`~/.config/ui-theme` at startup.
+
+Everything updates live: gsettings for GTK, `kitty @ set-colors` for open
+terminals, `:colorscheme` pushed to running nvim over its RPC socket, dunst
+killed so D-Bus activation restarts it, and `i3-msg restart` (which keeps your
+layout).
+
+### Browsers following the mode
+
+Firefox, Chrome and Electron read the XDG portal's `org.freedesktop.appearance`,
+not gsettings. Under GNOME `xdg-desktop-portal-gnome` serves that; under i3
+nothing claims the interface, so apps ignore the switch. Fixed with
+`~/.config/xdg-desktop-portal/portals.conf`:
+
+```ini
+[preferred]
+default=gtk
+org.freedesktop.impl.portal.Settings=gtk
+```
+
+Restart both `xdg-desktop-portal.service` and `xdg-desktop-portal-gtk.service`
+after changing it — the GTK backend caches at startup, so restarting only the
+front-end leaves it reporting a stale value.
+
+### Two i3 constraints worth knowing
+
+i3 variables do **not** cross an `include` boundary — `set $bg` in an included
+file leaves every colour as `Could not parse color: $bg`. Literal hex does cross,
+which is why the colours are generated from a template rather than swapped as a
+variables file.
+
+`colors` must sit inside the `bar` block and i3 cannot include a fragment into an
+existing block, so the whole bar block lives in the generated file.
