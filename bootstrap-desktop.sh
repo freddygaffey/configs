@@ -179,7 +179,7 @@ link "$DOTFILES/systemd/wallpaper.timer"   "$HOME/.config/systemd/user/wallpaper
 # Wallpaper directories, so `wallpaper status` has somewhere to point at. The
 # timer is NOT enabled here — rotation is opt-in:
 #   systemctl --user enable --now wallpaper.timer
-mkdir -p "$HOME/.local/share/wallpapers/dark" "$HOME/.local/share/wallpapers/light"
+mkdir -p "$HOME/Pictures/Wallpapers/all" "$HOME/Pictures/Wallpapers/dark" "$HOME/Pictures/Wallpapers/light"
 systemctl --user daemon-reload 2>/dev/null || true
 
 chmod +x "$DOTFILES"/i3/scripts/* 2>/dev/null || true

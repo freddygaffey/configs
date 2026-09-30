@@ -220,8 +220,8 @@ layout).
 ### Wallpaper
 
 Images go in `dark/` and `light/` under the first of these that exists:
-`$WALLPAPER_DIR`, `~/.local/share/wallpapers` (the default), or
-`~/Pictures/Wallpapers`. Which set is used follows the UI mode — `dark` mode uses
+`$WALLPAPER_DIR`, `~/Pictures/Wallpapers` (the default), or
+`~/.local/share/wallpapers`. Which set is used follows the UI mode — `dark` mode uses
 `dark/`, `light` and `fly` use `light/`, since what matters is what the wallpaper
 sits behind.
 

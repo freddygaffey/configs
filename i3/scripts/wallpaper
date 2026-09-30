@@ -12,8 +12,8 @@
 # is the first of these that exists, so it works wherever you keep them:
 #
 #   $WALLPAPER_DIR                  if set
-#   ~/.local/share/wallpapers       default — XDG data, no new visible dir in $HOME
-#   ~/Pictures/Wallpapers           if you prefer that
+#   ~/Pictures/Wallpapers           default — alongside the source photos
+#   ~/.local/share/wallpapers       fallback, for a machine with no ~/Pictures
 #
 # Deliberately NOT in this git repo. git keeps every version of a binary forever,
 # so a handful of photos become permanent weight on every clone — including the
@@ -33,12 +33,12 @@ set -eu
 REPO="${UI_MODE_REPO:-$HOME/.dotfiles/configs}"
 resolve_dir() {
     [ -n "${WALLPAPER_DIR:-}" ] && { printf '%s' "$WALLPAPER_DIR"; return; }
-    for candidate in "$HOME/.local/share/wallpapers" "$HOME/Pictures/Wallpapers"; do
+    for candidate in "$HOME/Pictures/Wallpapers" "$HOME/.local/share/wallpapers"; do
         [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
     done
     # Nothing exists yet: name the default so `status` can tell you where to put
     # images, and so mkdir has somewhere to go if you add some.
-    printf '%s' "$HOME/.local/share/wallpapers"
+    printf '%s' "$HOME/Pictures/Wallpapers"
 }
 WALLPAPER_DIR=$(resolve_dir)
 STATE="$HOME/.local/state/i3-wallpaper"

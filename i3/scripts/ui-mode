@@ -2,8 +2,10 @@
 # Switch the whole desktop between three looks.
 #
 #   ui-mode dark     everything dark
-#   ui-mode light    light apps, dark terminal and editor — reading and browsing
-#                    without the terminal turning into a lamp
+#   ui-mode light    light apps, and a BLUE terminal — neither the near-black of
+#                    dark mode nor the off-white of fly. A deliberate third
+#                    state, so light mode does not read as dark mode with the
+#                    browser wrong
 #   ui-mode fly      everything light, terminal and editor included — for
 #                    working outdoors in glare
 #   ui-mode cycle    dark -> light -> fly -> dark
@@ -51,12 +53,13 @@ current() { [ -r "$MODE_FILE" ] && cat "$MODE_FILE" || echo dark; }
 
 # mode -> gtk_theme  colour_scheme  palette
 #
-# i3, the terminal and nvim all follow the palette; only GTK differs between
-# dark and light. That is exactly what "light mode with a dark terminal" means.
+# Each mode has its own palette. light is not dark-with-light-GTK: it gets
+# nightfox, a blue-tinted dark that sits next to white app windows better than
+# pure black does.
 settings_for() {
     case "$1" in
         dark)  echo "Yaru-dark prefer-dark  carbonfox" ;;
-        light) echo "Yaru      prefer-light carbonfox" ;;
+        light) echo "Yaru      prefer-light nightfox"  ;;
         fly)   echo "Yaru      prefer-light dayfox"    ;;
         *)     usage ;;
     esac
