@@ -22,7 +22,7 @@ client.urgent           @urgent@ @urgent@    @bg@    @urgent@   @urgent@
 bar {
     status_command ~/.config/i3/scripts/status ~/.config/i3/i3status.conf
     position top
-    font pango:JetBrains Mono 10
+    font pango:JetBrainsMono Nerd Font 10
     tray_output primary
     separator_symbol " | "
     # Breathing room around the tray icons, which otherwise sit hard against

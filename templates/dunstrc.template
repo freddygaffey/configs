@@ -32,7 +32,7 @@
     corner_radius = 4
 
     sort = yes
-    font = JetBrains Mono 10
+    font = JetBrainsMono Nerd Font 10
     line_height = 0
     markup = full
     format = "<b>%s</b>\n%b"

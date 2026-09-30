@@ -37,7 +37,7 @@ set $term ~/.config/i3/scripts/terminal
 set $lock i3lock -n -c 161616
 
 # Upstream default font. Pango, so it handles the bar's glyphs.
-font pango:JetBrains Mono 11
+font pango:JetBrainsMono Nerd Font 11
 
 # ── Startup ────────────────────────────────────────────────────────────
 # --no-startup-id on everything: without it i3 shows a "loading" cursor forever

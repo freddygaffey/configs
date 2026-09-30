@@ -174,6 +174,38 @@ link "$DOTFILES/kitty/kitty.conf" "$HOME/.config/kitty/kitty.conf"
 
 chmod +x "$DOTFILES"/i3/scripts/* 2>/dev/null || true
 
+# ── 4a. Nerd Font ──────────────────────────────────────────────────────
+# Ubuntu's fonts-jetbrains-mono is the UNPATCHED build. nvim-tree and lualine
+# draw file-type icons via nvim-web-devicons, and without the patched glyphs
+# every icon renders as a tofu box. No apt package ships Nerd Fonts, so fetch the
+# patched build into ~/.local/share/fonts — a user font dir, so no root needed.
+install_nerd_font() {
+  if fc-list : family 2>/dev/null | grep -qi 'JetBrainsMono Nerd Font'; then
+    info "JetBrainsMono Nerd Font already installed"
+    return 0
+  fi
+  command -v unzip >/dev/null 2>&1 || { warn "unzip missing — skipping Nerd Font"; return 0; }
+  local dir tmp
+  dir="$HOME/.local/share/fonts/JetBrainsMonoNerd"
+  tmp="$(mktemp -d)"
+  info "Installing JetBrainsMono Nerd Font…"
+  if curl -fsSL -o "$tmp/JetBrainsMono.zip" \
+       https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip; then
+    mkdir -p "$dir"
+    # Just the four faces actually used; the archive is ~128 MB of variants.
+    unzip -q -o "$tmp/JetBrainsMono.zip" -d "$dir" \
+      'JetBrainsMonoNerdFont-Regular.ttf' 'JetBrainsMonoNerdFont-Bold.ttf' \
+      'JetBrainsMonoNerdFont-Italic.ttf' 'JetBrainsMonoNerdFont-BoldItalic.ttf' \
+      2>/dev/null || unzip -q -o "$tmp/JetBrainsMono.zip" -d "$dir"
+    fc-cache -f "$HOME/.local/share/fonts" >/dev/null 2>&1
+    info "Nerd Font installed"
+  else
+    warn "Nerd Font download failed — icons will render as boxes"
+  fi
+  rm -rf "$tmp"
+}
+install_nerd_font
+
 # ── 4b. Seed the generated theme files ─────────────────────────────────
 # i3's colours and the whole bar block are generated per UI mode from
 # templates/ + themes/. Without ~/.config/i3/colours.conf there is no bar at
