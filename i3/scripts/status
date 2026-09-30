@@ -34,6 +34,8 @@ GPU = os.path.expanduser("~/.config/i3/scripts/gpu-status")
 GOOD = "#25be6a"
 WARN = "#f1c21b"
 BAD = "#ee5396"
+DIM = "#6b6b6b"
+ACCENT = "#78a9ff"
 
 # 24 threads (8 P + 16 E), so a load of 4 is idle-ish and 8 is unremarkable.
 # A single max_threshold cannot express that, which is why load is coloured here.
@@ -74,9 +76,45 @@ def colour_load(block):
         block["color"] = GOOD
 
 
+# Colour carries the meaning here: green is cheap, amber costs battery. Saves
+# reading the word at all once you know the colours.
+PROFILE_COLOUR = {
+    "performance": WARN,
+    "balanced": ACCENT,
+    "power-saver": GOOD,
+    "low-power": GOOD,
+}
+
+
 def shorten_profile(block):
     text = block.get("full_text", "").strip()
     block["full_text"] = "\u26a1 " + PROFILE_SHORT.get(text, text)
+    colour = PROFILE_COLOUR.get(text)
+    if colour:
+        block["color"] = colour
+
+
+def colour_gpu(block):
+    """Dim when the card is asleep, graded by utilisation when it is not.
+
+    Asleep is the normal, desirable state on battery, so it should not read as
+    an alarm — but it should be visually distinct from 0% while awake."""
+    text = block.get("full_text", "")
+    if "zZ" in text:
+        block["color"] = DIM
+        return
+    match = re.search(r"(\d+)%", text)
+    if not match:
+        block["color"] = DIM
+        return
+    util = int(match.group(1))
+    block["color"] = BAD if util >= 80 else WARN if util >= 40 else GOOD
+
+
+def colour_volume(block):
+    # format_muted is "vol ---", so muted is visible by shape as well as colour.
+    if "---" in block.get("full_text", ""):
+        block["color"] = DIM
 
 
 def compact_sizes(block):
@@ -91,12 +129,6 @@ def compact_sizes(block):
     block["full_text"] = text
 
 
-def tidy_battery(block):
-    """Drop '0.00 W' — plugged in and full means nothing is flowing, and a
-    zero reading just takes up room next to the percentage."""
-    block["full_text"] = re.sub(r"\s*0\.00\s*W", "", block.get("full_text", ""))
-
-
 def transform(blocks):
     for block in blocks:
         name = block.get("name")
@@ -106,16 +138,17 @@ def transform(blocks):
             # NB read_file's `instance` is the file path, not the module name,
             # so match on the name alone — there is only one such module.
             shorten_profile(block)
-        elif name == "battery":
-            tidy_battery(block)
         elif name in ("memory", "disk_info"):
             compact_sizes(block)
+        elif name == "volume":
+            colour_volume(block)
 
     # Immediately after the profile block, so the power readings sit together.
     index = next((i for i, b in enumerate(blocks)
                   if b.get("name") == "read_file"), -1)
     block = gpu_block()
     if block is not None:
+        colour_gpu(block)
         blocks.insert(index + 1, block)
 
     # Drop empty blocks. A module with format_down = "" still emits a block, and
