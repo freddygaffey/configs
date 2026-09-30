@@ -135,6 +135,21 @@ def load_sidecar(image: Path) -> dict:
         return {"version": 1, "displays": {}}
 
 
+def image_size(image: Path) -> list[int]:
+    """Original pixel dimensions, without decoding the whole image.
+
+    The browser only ever sees a downscaled preview, so it cannot measure this
+    itself — and Center and Tile are defined in terms of real screen pixels, so
+    getting it wrong makes those previews meaningless.
+    """
+    try:
+        from PIL import Image
+        with Image.open(image) as img:
+            return list(img.size)
+    except Exception:                               # noqa: BLE001
+        return [0, 0]
+
+
 def preview_bytes(image: Path, box: int = 1400) -> tuple[bytes, str]:
     """A downscaled preview, so the browser is not handed a 7000px original.
 
@@ -208,7 +223,9 @@ class Handler(BaseHTTPRequestHandler):
             if not image:
                 self._json({"error": "not found"}, 404)
                 return
-            self._json(load_sidecar(image))
+            data = load_sidecar(image)
+            data["size"] = image_size(image)
+            self._json(data)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -288,7 +305,7 @@ PAGE = r"""<!doctype html>
 
   /* The frame IS the screen. It never moves; the image moves behind it. */
   #stageWrap { flex:1; display:grid; place-items:center; overflow:hidden; padding:20px; }
-  #frame { position:relative; overflow:hidden; background:#000;
+  #frame { position:relative; overflow:hidden; background:#161616;
            box-shadow:0 0 0 1px var(--line), 0 0 0 9999px rgba(10,10,10,.62);
            cursor:grab; touch-action:none; }
   #frame.grabbing { cursor:grabbing; }
@@ -355,7 +372,26 @@ let state = null, image = null, cfg = null, idx = 0;
 // "which part of the photo is visible" — and converting it to a stored crop is
 // pure arithmetic, no separate rectangle to keep in sync.
 let scale = 1, ox = 0, oy = 0;
-let nat = {w:1, h:1};        // natural size of the preview we loaded
+let nat = {w:1, h:1};        // size of the DOWNSCALED preview we loaded
+let orig = {w:1, h:1};       // size of the original file on disk
+
+// Frame pixels per real screen pixel. The frame stands in for the display, so
+// this is the factor that makes Center and Tile previews truthful: those modes
+// are defined in real screen pixels, not in preview pixels.
+const framePx = () => $("#frame").clientWidth / dispWH()[0];
+
+// Scale at which the preview image is drawn 1:1 on the real screen.
+const nativeScale = () => framePx() * (orig.w / nat.w);
+
+// Smallest scale that still covers the frame, and the largest that fits inside.
+function coverScale() {
+  const f = $("#frame");
+  return Math.max(f.clientWidth / nat.w, f.clientHeight / nat.h);
+}
+function containScale() {
+  const f = $("#frame");
+  return Math.min(f.clientWidth / nat.w, f.clientHeight / nat.h);
+}
 
 const msg = t => $("#msg").textContent = t;
 const dispWH = () => $("#display").value.split("x").map(Number);
@@ -413,17 +449,15 @@ async function pick(i) {
   });
   nat = {w: img.naturalWidth, h: img.naturalHeight};
   cfg = await (await fetch("/api/config?path=" + encodeURIComponent(image.path))).json();
+  orig = {w: (cfg.size && cfg.size[0]) || nat.w, h: (cfg.size && cfg.size[1]) || nat.h};
   loadEntry();
 }
 
-// Smallest scale at which the image still covers the whole frame. Also the
-// lower bound while panning, so a crop can never include empty space.
-function coverScale() {
-  const f = $("#frame");
-  return Math.max(f.clientWidth / nat.w, f.clientHeight / nat.h);
-}
-
 function clamp() {
+  // Only Crop clamps. The other fits are allowed to letterbox, because that is
+  // what they genuinely do on screen — hiding it here is what made the preview
+  // lie in the first place.
+  if ($("#fit").value !== "crop") return;
   const f = $("#frame");
   const w = nat.w * scale, h = nat.h * scale;
   ox = Math.min(0, Math.max(ox, f.clientWidth - w));
@@ -432,21 +466,50 @@ function clamp() {
   if (h < f.clientHeight) oy = (f.clientHeight - h) / 2;
 }
 
+function centreAt(s) {
+  const f = $("#frame");
+  scale = s;
+  ox = (f.clientWidth - nat.w * s) / 2;
+  oy = (f.clientHeight - nat.h * s) / 2;
+}
+
 function draw() {
   clamp();
-  $("#img").style.transform = `translate(${ox}px, ${oy}px) scale(${scale})`;
-  $("#img").style.width = nat.w + "px";
-  $("#img").style.height = nat.h + "px";
-  const z = Math.round(scale / coverScale() * 100);
-  $("#zoomVal").textContent = z + "%";
+  const img = $("#img"), f = $("#frame"), fit = $("#fit").value;
+  if (fit === "stretch") {
+    // Distorts to fill, so width and height are set independently rather than
+    // through a uniform scale.
+    img.style.width = f.clientWidth + "px";
+    img.style.height = f.clientHeight + "px";
+    img.style.transform = "translate(0px, 0px)";
+  } else {
+    img.style.width = nat.w + "px";
+    img.style.height = nat.h + "px";
+    img.style.transform = `translate(${ox}px, ${oy}px) scale(${scale})`;
+  }
+  // Report zoom against 1:1 on the real screen, which is the number that means
+  // something — 100% is one image pixel per screen pixel.
+  $("#zoomVal").textContent = Math.round(scale / nativeScale() * 100) + "%";
+}
+
+// Place the image the way this fit actually places it on screen.
+function renderFit() {
+  const fit = $("#fit").value, f = $("#frame");
+  const zoom = +($("#zoomVal").dataset.zoom || 1);
+  if (fit === "fill")        centreAt(coverScale());
+  else if (fit === "max")    centreAt(containScale());
+  else if (fit === "center") centreAt(nativeScale() * zoom);
+  else if (fit === "tile") {
+    $("#tile").style.backgroundImage = `url(${$("#img").src})`;
+    $("#tile").style.backgroundSize = `${nat.w * nativeScale() * zoom}px auto`;
+  }
+  draw();
 }
 
 function resetView() {
-  scale = coverScale();
-  const f = $("#frame");
-  ox = (f.clientWidth - nat.w * scale) / 2;
-  oy = (f.clientHeight - nat.h * scale) / 2;
-  draw();
+  const fit = $("#fit").value;
+  if (fit === "crop") { centreAt(coverScale()); draw(); }
+  else { $("#zoomVal").dataset.zoom = 1; renderFit(); }
 }
 
 // View -> stored crop. Fractions of the image, so a rescaled copy of the same
@@ -474,12 +537,10 @@ function viewFromCrop(e) {
 
 function loadEntry() {
   const entry = (cfg.displays || {})[$("#display").value];
-  $("#fit").value = entry?.fit || "crop";
-  if (entry?.fit === "crop") viewFromCrop(entry);
-  else resetView();
-  if (entry && (entry.fit === "tile" || entry.fit === "center") && entry.zoom)
-    scale = coverScale() * entry.zoom, draw();
+  $("#fit").value = entry?.fit || "max";
+  $("#zoomVal").dataset.zoom = entry?.zoom ?? 1;
   onFit();
+  if (entry?.fit === "crop") viewFromCrop(entry);
   msg(entry ? `${image.name} — saved ${entry.fit}` : `${image.name} — unset`);
 }
 
@@ -491,19 +552,18 @@ function onFit() {
   $("#tile").classList.toggle("hide", fit !== "tile");
   $("#zoomWrap").classList.toggle("hide", !(isCrop || hasZoom));
   $("#frame").style.cursor = isCrop ? "grab" : "default";
-  if (fit === "tile") {
-    const z = scale / coverScale();
-    $("#tile").style.backgroundImage = `url(${$("#img").src})`;
-    $("#tile").style.backgroundSize = `${nat.w * coverScale() * z}px auto`;
-  }
-  if (fit === "max" || fit === "fill" || fit === "stretch") resetView();
+  $("#hint").textContent = isCrop
+    ? "drag to pan · scroll to zoom · space save+next · 0 reset"
+    : (hasZoom ? "scroll to scale · space save+next"
+               : "no adjustment for this fit · space save+next");
+  renderFit();
 }
 
 function entryFromUI() {
   const fit = $("#fit").value;
   if (fit === "crop") return cropFromView();
   if (fit === "tile" || fit === "center")
-    return {fit, zoom: +(scale / coverScale()).toFixed(3)};
+    return {fit, zoom: +(+($("#zoomVal").dataset.zoom || 1)).toFixed(3)};
   return {fit};
 }
 
@@ -552,14 +612,20 @@ $("#frame").addEventListener("wheel", e => {
   const rect = $("#frame").getBoundingClientRect();
   const mx = e.clientX - rect.left, my = e.clientY - rect.top;
   const factor = Math.exp(-e.deltaY * 0.0015);
-  const min = fit === "crop" ? coverScale() : coverScale() * 0.05;
-  const next = Math.min(Math.max(scale * factor, min), coverScale() * 12);
-  // Keep the pixel under the cursor fixed.
+  if (fit === "tile" || fit === "center") {
+    const z = Math.min(Math.max((+($("#zoomVal").dataset.zoom || 1)) * factor, 0.05), 8);
+    $("#zoomVal").dataset.zoom = z;
+    renderFit();
+    return;
+  }
+  if (fit !== "crop") return;
+  const next = Math.min(Math.max(scale * factor, coverScale()), nativeScale() * 8);
+  // Keep the pixel under the cursor fixed, or zooming in on a detail walks it
+  // off screen and you chase it with the mouse.
   ox = mx - (mx - ox) * (next / scale);
   oy = my - (my - oy) * (next / scale);
   scale = next;
   draw();
-  if (fit === "tile" || fit === "center") onFit();
 }, {passive:false});
 
 // ----- keyboard: the whole point, with ~70 images to get through ------------
