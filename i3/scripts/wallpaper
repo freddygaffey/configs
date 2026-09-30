@@ -85,12 +85,35 @@ fallback() {
         && xsetroot -solid "$bg" >/dev/null 2>&1 || true
 }
 
+# How an image is fitted to the screen:
+#
+#   max   show the WHOLE image, letterboxed with the palette background where
+#         the aspect does not match. Nothing is lost. This is the default,
+#         because these are photographs someone composed — a 4:3 photo on a
+#         16:10 screen loses a quarter of its height to --bg-fill, which is
+#         cropping the user's picture without being asked.
+#   fill  scale to cover the screen and crop the overflow. No borders, but the
+#         top and bottom of a portrait-ish photo are simply gone.
+#
+# Set WALLPAPER_FIT=fill if you would rather have no letterboxing.
+FIT="${WALLPAPER_FIT:-max}"
+
 apply() {
     image="$1"
     if [ -r "$image" ] && command -v feh >/dev/null 2>&1; then
+        case "$FIT" in
+            fill) mode=--bg-fill ;;
+            *)    mode=--bg-max  ;;
+        esac
+        # --image-bg sets the letterbox colour, so the bars match the theme
+        # instead of defaulting to black.
+        theme=$( [ "$(mode)" = fly ] && echo dayfox || \
+                 { [ "$(mode)" = light ] && echo nightfox || echo carbonfox; } )
+        bg=$(sed -n 's/^bg=//p' "$REPO/themes/$theme.env" 2>/dev/null | head -1)
         # --no-fehbg: feh would otherwise write ~/.fehbg, which competes with
         # this script's own state file for "what is the current wallpaper".
-        feh --no-fehbg --bg-fill "$image" >/dev/null 2>&1 && printf '%s\n' "$image" > "$STATE"
+        feh --no-fehbg --image-bg "${bg:-#161616}" "$mode" "$image" >/dev/null 2>&1 \
+            && printf '%s\n' "$image" > "$STATE"
     else
         fallback
     fi

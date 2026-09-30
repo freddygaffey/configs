@@ -232,6 +232,11 @@ sits behind.
 | `Super+Ctrl+i` | random |
 | systemd user timer | every 30 min — `systemctl --user enable --now wallpaper.timer` |
 
+Images are shown **whole**, letterboxed in the palette's background colour where
+the aspect does not match the screen. Your photos are 4:3 and 3:2; the screen is
+16:10, so filling it would crop roughly a quarter of the height off each one.
+`WALLPAPER_FIT=fill` opts into cropping instead, if you prefer no borders.
+
 With no images present it falls back to a flat fill of the palette's background,
 so this never needs setting up before i3 is usable.
 
