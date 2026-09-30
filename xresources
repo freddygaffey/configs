@@ -1,0 +1,15 @@
+! Xresources — X11 font rendering and scaling. Symlinked to ~/.Xresources and
+! merged by i3 on login (exec_always xrdb -merge).
+!
+! Xft.dpi is how X11 apps get scaled. GNOME did this with
+! text-scaling-factor, which i3 does not read.
+!
+! 110 rather than the default 96 is a touch over 1.15x — enough to make a
+! 2560x1600 16-inch panel comfortable without the blurry half-scaling you get from
+! jumping to 144. Raise it if you want more; it only ever affects apps started
+! afterwards, so reload i3 and reopen them.
+Xft.dpi:        110
+Xft.antialias:  true
+Xft.hinting:    true
+Xft.rgba:       rgb
+Xft.hintstyle:  hintslight

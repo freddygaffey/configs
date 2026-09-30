@@ -169,6 +169,7 @@ link "$DOTFILES/i3/config"         "$HOME/.config/i3/config"
 link "$DOTFILES/i3/i3status.conf"  "$HOME/.config/i3/i3status.conf"
 link "$DOTFILES/i3/scripts"        "$HOME/.config/i3/scripts"
 link "$DOTFILES/ghostty/config"    "$HOME/.config/ghostty/config"
+link "$DOTFILES/xresources"        "$HOME/.Xresources"
 
 chmod +x "$DOTFILES"/i3/scripts/* 2>/dev/null || true
 

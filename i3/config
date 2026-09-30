@@ -37,7 +37,7 @@ set $term ~/.config/i3/scripts/terminal
 set $lock i3lock -n -c 161616
 
 # Upstream default font. Pango, so it handles the bar's glyphs.
-font pango:JetBrains Mono 10
+font pango:JetBrains Mono 11
 
 # ── Startup ────────────────────────────────────────────────────────────
 # --no-startup-id on everything: without it i3 shows a "loading" cursor forever
@@ -71,6 +71,15 @@ exec --no-startup-id sh -c 'for p in /usr/libexec/polkit-gnome-authentication-ag
 
 # Notifications. i3 has none; dunst is the standard answer.
 exec --no-startup-id sh -c 'command -v dunst >/dev/null && dunst'
+
+# Xresources — Xft.dpi, which is how X11 apps get scaled. 110 rather than the
+# default 96 for a touch over 1.15x, which this 2560x1600 16" panel needs to be
+# comfortable. GNOME handled this with text-scaling-factor; i3 does not.
+exec_always --no-startup-id xrdb -merge ~/.Xresources
+
+# Pointer settings GNOME's settings daemon used to apply. Without this,
+# scrolling reverses and tap-to-click stops working the first time you use i3.
+exec_always --no-startup-id ~/.config/i3/scripts/input-setup
 
 # Match the panel refresh rate to the power source, and keep matching it.
 exec_always --no-startup-id ~/.config/i3/scripts/refresh-rate-daemon

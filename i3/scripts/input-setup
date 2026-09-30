@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+# Pointer settings that GNOME used to apply for us.
+#
+# Under GNOME, gsd-mouse pushed the gsettings values (natural scrolling,
+# tap-to-click) into libinput on login. i3 has no such daemon, so those settings
+# sit in gsettings doing nothing and libinput falls back to its own defaults —
+# which is why scrolling reverses and tap-to-click stops working the first time
+# you log into i3.
+#
+# Applied by device name rather than id: xinput ids change between boots and when
+# devices are re-plugged.
+#
+# Hotplugged pointers are NOT covered — this runs at login (and on i3 reload).
+# Re-run it, or reload i3, after plugging in a new mouse.
+
+set -u
+
+# 1 = content follows your fingers, as macOS and GNOME do it.
+NATURAL_SCROLL="${NATURAL_SCROLL:-1}"
+TAP_TO_CLICK="${TAP_TO_CLICK:-1}"
+
+command -v xinput >/dev/null 2>&1 || exit 0
+
+xinput list --id-only 2>/dev/null | while read -r id; do
+    props=$(xinput list-props "$id" 2>/dev/null) || continue
+
+    case "$props" in
+        *"libinput Natural Scrolling Enabled ("*)
+            xinput set-prop "$id" "libinput Natural Scrolling Enabled" "$NATURAL_SCROLL" 2>/dev/null
+            ;;
+    esac
+
+    # Touchpads only — mice have no tapping property.
+    case "$props" in
+        *"libinput Tapping Enabled ("*)
+            xinput set-prop "$id" "libinput Tapping Enabled" "$TAP_TO_CLICK" 2>/dev/null
+            ;;
+    esac
+done
