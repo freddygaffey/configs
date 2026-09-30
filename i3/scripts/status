@@ -181,10 +181,20 @@ CLICK_ACTIONS = {
     # The profile block cycles the profile, same as Super+p.
     ("read_file", 1): [os.path.expanduser(
         "~/.config/i3/scripts/cycle-power-profile")],
-    # nvidia-smi in a terminal: nvtop would be nicer but is not installed.
+    # nvtop when it is installed (live graphs, per-process usage), otherwise a
+    # one-shot nvidia-smi. Resolved at click time so installing nvtop upgrades
+    # this with no config change.
+    #
+    # nvidia-settings is deliberately not used: on this PRIME on-demand laptop it
+    # detects the offload setup and exits without ever opening a window.
     ("gpu", 1): ["sh", "-c",
-                 "$HOME/.config/i3/scripts/terminal -e sh -c "
-                 "'nvidia-smi; echo; read -p \"[enter to close]\" _'"],
+                 'T="$HOME/.config/i3/scripts/terminal"; '
+                 'if command -v nvtop >/dev/null 2>&1; then '
+                 '"$T" -e nvtop; '
+                 'else '
+                 '"$T" -e sh -c "nvidia-smi; echo; '
+                 'printf \'[enter to close]\'; read _"; '
+                 'fi'],
 }
 
 
