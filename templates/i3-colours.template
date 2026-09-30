@@ -14,10 +14,10 @@
 # child_border is the visible edge. Focused gets the accent, unfocused gets the
 # panel shade — a deliberately large step, since with no compositor this border
 # is the only indication of which window has focus.
-client.focused          @accent@ @accent@    @bg@    @accent@   @accent@
-client.focused_inactive @panel@  @panel@     @fg@    @panel@    @panel@
-client.unfocused        @panel@  @bg@        @dim@   @bg@       @panel@
-client.urgent           @urgent@ @urgent@    @bg@    @urgent@   @urgent@
+client.focused          @ui_accent@ @ui_accent@    @ui_bg@    @ui_accent@   @ui_accent@
+client.focused_inactive @ui_panel@  @ui_panel@     @ui_fg@    @ui_panel@    @ui_panel@
+client.unfocused        @ui_panel@  @ui_bg@        @ui_dim@   @ui_bg@       @ui_panel@
+client.urgent           @ui_urgent@ @ui_urgent@    @ui_bg@    @ui_urgent@   @ui_urgent@
 
 bar {
     status_command ~/.config/i3/scripts/status ~/.config/i3/i3status.conf
@@ -29,16 +29,16 @@ bar {
     colors {
         # panel, not bg: i3bar has no border option, so the only way to separate
         # the bar from the windows below it is to make it a different shade.
-        background @panel@
-        statusline @fg@
+        background @ui_panel@
+        statusline @ui_fg@
         # dim, NOT panel: the bar's background is panel, so a panel-coloured
         # separator is invisible and the blocks read as one padded run of text
         # with no dividers at all.
-        separator  @dim@
+        separator  @ui_dim@
         #                  border    background  text
-        focused_workspace  @accent@  @accent@    @bg@
-        active_workspace   @panel@   @panel@     @fg@
-        inactive_workspace @bg@      @bg@        @dim@
-        urgent_workspace   @urgent@  @urgent@    @bg@
+        focused_workspace  @ui_accent@  @ui_accent@    @ui_bg@
+        active_workspace   @ui_panel@   @ui_panel@     @ui_fg@
+        inactive_workspace @ui_bg@      @ui_bg@        @ui_dim@
+        urgent_workspace   @ui_urgent@  @ui_urgent@    @ui_bg@
     }
 }

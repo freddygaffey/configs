@@ -155,7 +155,10 @@ gaps outer 0
 gaps top 2
 smart_gaps on
 default_border pixel 2
-default_floating_border pixel 2
+# Wider than tiled windows on purpose: a floating window is resized by dragging
+# its edge, and a 2px target is fiddly with a trackpad. Tiled windows are resized
+# with the keyboard, so they do not need the extra pixels.
+default_floating_border pixel 5
 
 # NB there is deliberately no `smart_borders` line. Off is the default, and the
 # option only accepts enabling values — `smart_borders off` is a parse error, not
@@ -169,7 +172,11 @@ default_floating_border pixel 2
 # picom and set inactive-opacity if you decide the trade is worth it.
 
 # ── Window management ──────────────────────────────────────────────────
+# Super + left-drag moves a floating window, Super + right-drag resizes it —
+# from anywhere in the window, so you never have to hit the border at all.
 floating_modifier $mod
+
+# Tiled windows can also be dragged by their titlebar, or with Super held.
 tiling_drag modifier titlebar
 
 bindsym $mod+Return exec --no-startup-id $term
