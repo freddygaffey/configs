@@ -1,0 +1,20 @@
+/* rofi — launcher and window switcher. Symlinked to ~/.config/rofi/config.rasi.
+ *
+ * Colours are NOT here: they live in theme.rasi, which i3/scripts/ui-mode
+ * generates from the active palette. This file is only behaviour.
+ */
+configuration {
+    modi:                "drun,run,window";
+    show-icons:          true;
+    icon-theme:          "Yaru";
+    drun-display-format: "{name}";
+    display-drun:        "apps";
+    display-run:         "run";
+    display-window:      "windows";
+    kb-cancel:           "Escape,Super+d";
+    /* Ctrl-n/p as well as the arrows, matching tmux and readline habits. */
+    kb-row-down:         "Down,Control+n";
+    kb-row-up:           "Up,Control+p";
+}
+
+@theme "~/.config/rofi/theme.rasi"
