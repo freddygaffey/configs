@@ -203,10 +203,12 @@ bindsym $mod+Shift+i exec --no-startup-id ~/.config/i3/scripts/wallpaper next
 # u sits directly left of i, so back/forward are physically left/right.
 bindsym $mod+Shift+u exec --no-startup-id ~/.config/i3/scripts/wallpaper prev
 bindsym $mod+Ctrl+i  exec --no-startup-id ~/.config/i3/scripts/wallpaper random
-# Framing GUI: drag a box over a photo to choose which part of it becomes the
-# wallpaper, per display size. Saved to a sidecar JSON beside the image, so the
-# same photo can be cropped one way for this 16:10 panel and another for a
-# 21:9 monitor.
+# Framing app: a local web page for choosing how each photo sits on each display
+# — pan and zoom inside a screen-shaped frame, or pick a Mac-style fit (Fill,
+# Fit, Stretch, Center, Tile). Saved to a sidecar JSON beside the image, so the
+# same photo can be framed one way for this 16:10 panel and another for a 21:9
+# monitor. Browser rather than a desktop toolkit: no GUI dependency to install,
+# and it can be driven from the Mac over Tailscale.
 bindsym $mod+Ctrl+Shift+i exec --no-startup-id ~/.config/i3/scripts/wallpaper-config
 bindsym $mod+Tab exec --no-startup-id rofi -theme ~/.config/rofi/theme.rasi -show window
 

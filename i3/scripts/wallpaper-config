@@ -1,58 +1,63 @@
 #!/usr/bin/env python3
-"""Pick, per image and per display size, which part of the photo becomes the wallpaper.
+"""Framing tool for wallpapers: which part of a photo, at what scale, on which display.
 
-Drag a box over the image; that region is what fills the screen. The box is
-locked to the target display's aspect ratio, so what you draw is exactly what
-you get — no surprise cropping when it is applied.
+    wallpaper-config              serve on 127.0.0.1:8731 and open a browser
+    wallpaper-config --port 9000  a different port
+    wallpaper-config --no-open    do not launch a browser
+    wallpaper-config --host 0.0.0.0   reachable from another machine
 
-Why per display: a 3:2 photo framed nicely for the 16:10 laptop panel is the
-wrong crop for a 21:9 ultrawide. One global fit mode cannot serve both, so each
-display size gets its own row.
+A browser rather than a desktop GUI, for three reasons: no toolkit dependency to
+install (stdlib http.server only — PIL is used when present but is optional),
+drag-and-resize is far less code in the DOM than on a canvas widget, and it can
+be driven from the Mac over Tailscale while the wallpaper changes on the Legion.
 
-Settings are stored in a sidecar JSON next to the image (photo.png ->
-photo.png.json), keyed by display size:
+Why any of this exists: a 3:2 photo framed well for the 16:10 laptop panel is the
+wrong crop on a 21:9 monitor, and one global fit cannot serve both. So each image
+gets a sidecar JSON keyed by display size, with a row per display:
 
+    photo.png.json
     {
       "version": 1,
       "displays": {
         "2560x1600": {"fit": "crop", "x": 0.10, "y": 0.05, "w": 0.75, "h": 0.75},
-        "3440x1440": {"fit": "crop", "x": 0.00, "y": 0.20, "w": 1.00, "h": 0.42},
-        "default":   {"fit": "max"}
+        "3440x1440": {"fit": "tile", "zoom": 0.5},
+        "1920x1080": {"fit": "max"}
       }
     }
 
-Coordinates are fractions of the image, not pixels, so a rescaled or re-exported
-copy of the same photo keeps its framing.
+Crop coordinates are fractions of the image rather than pixels, so a rescaled or
+re-exported copy of the same photo keeps its framing.
 
-Sidecar files rather than one central index because the wallpapers live outside
-this git repo (they are large binaries, and the repo is public). Keeping the
-framing beside the image means moving or backing up the folder takes the
-settings with it, and a deleted image cannot leave a stale entry behind.
+Sidecars rather than one central index because the wallpapers deliberately live
+outside this git repo (large binaries, and the repo is public). Framing travels
+with the folder, and a deleted image cannot strand an entry behind it.
 
-    wallpaper-config                 open the GUI
-    wallpaper-config <image>         open with that image selected
+Binds to 127.0.0.1 by default: this serves the contents of your Pictures folder
+and writes files next to them, which has no business being on the network
+unasked.
 """
 from __future__ import annotations
 
+import argparse
+import io
 import json
+import mimetypes
+import os
+import re
 import subprocess
-import sys
-import tkinter as tk
+import threading
+import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from tkinter import ttk
-
-from PIL import Image, ImageTk
+from urllib.parse import parse_qs, urlparse
 
 SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif",
             ".avif", ".tif", ".tiff"}
-
-# Common shapes, so configuring for a monitor you do not have plugged in right
-# now is possible. The current display is added at runtime and selected first.
 PRESETS = ["2560x1600", "3840x2160", "3440x1440", "2560x1440", "1920x1080"]
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def wallpaper_dir() -> Path:
-    import os
     if os.environ.get("WALLPAPER_DIR"):
         return Path(os.environ["WALLPAPER_DIR"])
     for candidate in (Path.home() / "Pictures/Wallpapers",
@@ -62,35 +67,55 @@ def wallpaper_dir() -> Path:
     return Path.home() / "Pictures/Wallpapers"
 
 
+ROOT = wallpaper_dir()
+
+
 def current_display() -> str:
-    """Resolution of the primary display, via xrandr."""
     try:
         out = subprocess.run(["xrandr", "--listmonitors"],
                              capture_output=True, text=True, timeout=5).stdout
         for line in out.splitlines():
-            if "*" in line:                      # the primary monitor
-                # " 0: +*eDP-1 2560/344x1600/215+0+0  eDP-1"
+            if "*" in line:
                 spec = line.split()[2]
-                w = spec.split("/")[0]
-                h = spec.split("x")[1].split("/")[0]
-                return f"{w}x{h}"
-    except Exception:                            # noqa: BLE001 - best effort
+                return f'{spec.split("/")[0]}x{spec.split("x")[1].split("/")[0]}'
+    except Exception:                               # noqa: BLE001 - best effort
         pass
     return "2560x1600"
 
 
-def list_images(root: Path) -> list[Path]:
-    """Every image under the wallpaper dir, deduplicated by real path.
+def list_images() -> list[Path]:
+    """Images under the wallpaper dir, deduplicated by real path.
 
-    dark/ and light/ are commonly symlinks into a single all/ folder, so the
-    same photo shows up more than once. Resolve and dedupe, or you configure a
-    file and the "other" copy looks untouched.
+    dark/ and light/ are usually symlinks into one all/ folder, so the same photo
+    appears several times. Without dedupe you configure one copy and the others
+    look untouched.
     """
     seen: dict[Path, Path] = {}
-    for path in sorted(root.rglob("*")):
-        if path.suffix.lower() in SUFFIXES and path.is_file():
-            seen.setdefault(path.resolve(), path)
+    if ROOT.is_dir():
+        for path in sorted(ROOT.rglob("*")):
+            if path.suffix.lower() in SUFFIXES and path.is_file():
+                seen.setdefault(path.resolve(), path)
     return sorted(seen.values())
+
+
+def safe_image(raw: str) -> Path | None:
+    """Resolve a requested path, refusing anything outside the wallpaper dir.
+
+    This server hands out file contents, so a path from the query string is
+    untrusted input: without this check, ?path=../../.ssh/id_ed25519 would be
+    served happily.
+    """
+    try:
+        path = Path(raw).resolve()
+    except (OSError, ValueError):
+        return None
+    if path.suffix.lower() not in SUFFIXES or not path.is_file():
+        return None
+    try:
+        path.relative_to(ROOT.resolve())
+    except ValueError:
+        return None
+    return path
 
 
 def sidecar_for(image: Path) -> Path:
@@ -106,287 +131,491 @@ def load_sidecar(image: Path) -> dict:
         data.setdefault("displays", {})
         return data
     except (json.JSONDecodeError, OSError):
-        # A corrupt sidecar must not make the image unconfigurable. Start fresh;
-        # saving overwrites it.
+        # A corrupt sidecar must not make the image unconfigurable.
         return {"version": 1, "displays": {}}
 
 
-def save_sidecar(image: Path, data: dict) -> None:
-    sidecar_for(image).write_text(json.dumps(data, indent=2) + "\n")
+def preview_bytes(image: Path, box: int = 1400) -> tuple[bytes, str]:
+    """A downscaled preview, so the browser is not handed a 7000px original.
 
-
-class Configurator(tk.Tk):
-    # Canvas is a fixed size so the drawn box maps predictably to the image.
-    CANVAS_W, CANVAS_H = 900, 620
-    HANDLE = 10          # px grab radius for corner resize
-
-    def __init__(self, preselect: Path | None = None):
-        super().__init__()
-        self.title("Wallpaper framing")
-        self.root_dir = wallpaper_dir()
-        self.images = list_images(self.root_dir)
-        self.image: Path | None = None
-        self.pil: Image.Image | None = None
-        self.photo: ImageTk.PhotoImage | None = None
-        # Where the scaled image sits on the canvas, and its scale factor.
-        self.off_x = self.off_y = 0
-        self.scale = 1.0
-        # Selection rect in CANVAS pixels.
-        self.rect = [0, 0, 0, 0]
-        self.drag_mode: str | None = None
-        self.drag_from = (0, 0)
-
-        self._build()
-        if not self.images:
-            self.status.set(f"No images found under {self.root_dir}")
-            return
-        target = preselect.resolve() if preselect else None
-        index = 0
-        for i, path in enumerate(self.images):
-            if target and path.resolve() == target:
-                index = i
-                break
-        self.listbox.selection_set(index)
-        self.listbox.see(index)
-        self.load_image(self.images[index])
-
-    # ---------------------------------------------------------------- layout
-    def _build(self) -> None:
-        left = ttk.Frame(self, padding=6)
-        left.pack(side="left", fill="y")
-
-        ttk.Label(left, text="Images").pack(anchor="w")
-        self.listbox = tk.Listbox(left, width=34, height=26, exportselection=False)
-        for path in self.images:
-            self.listbox.insert("end", path.name)
-        self.listbox.pack(fill="y", expand=True)
-        self.listbox.bind("<<ListboxSelect>>", self.on_pick)
-
-        right = ttk.Frame(self, padding=6)
-        right.pack(side="left", fill="both", expand=True)
-
-        bar = ttk.Frame(right)
-        bar.pack(fill="x", pady=(0, 6))
-        ttk.Label(bar, text="Display").pack(side="left")
-        current = current_display()
-        choices = [current] + [p for p in PRESETS if p != current]
-        self.display = tk.StringVar(value=current)
-        box = ttk.Combobox(bar, textvariable=self.display, values=choices, width=12)
-        box.pack(side="left", padx=6)
-        box.bind("<<ComboboxSelected>>", lambda _e: self.on_display_change())
-        # Typed sizes are allowed, for a monitor not in PRESETS.
-        box.bind("<Return>", lambda _e: self.on_display_change())
-
-        ttk.Button(bar, text="Whole image", command=self.reset_rect).pack(side="left", padx=3)
-        ttk.Button(bar, text="Save", command=self.save).pack(side="left", padx=3)
-        ttk.Button(bar, text="Save + apply", command=self.save_apply).pack(side="left", padx=3)
-        ttk.Button(bar, text="Clear", command=self.clear).pack(side="left", padx=3)
-
-        self.canvas = tk.Canvas(right, width=self.CANVAS_W, height=self.CANVAS_H,
-                                bg="#161616", highlightthickness=0)
-        self.canvas.pack()
-        self.canvas.bind("<Button-1>", self.on_press)
-        self.canvas.bind("<B1-Motion>", self.on_drag)
-        self.canvas.bind("<ButtonRelease-1>", lambda _e: setattr(self, "drag_mode", None))
-
-        self.status = tk.StringVar(value="")
-        ttk.Label(right, textvariable=self.status).pack(anchor="w", pady=(6, 0))
-
-        self.bind("<Escape>", lambda _e: self.destroy())
-        for key, dx, dy in (("Left", -5, 0), ("Right", 5, 0), ("Up", 0, -5), ("Down", 0, 5)):
-            self.bind(f"<{key}>", lambda _e, dx=dx, dy=dy: self.nudge(dx, dy))
-
-    # ----------------------------------------------------------------- image
-    def load_image(self, path: Path) -> None:
-        self.image = path
-        with Image.open(path) as img:
+    Falls back to the raw file when PIL is missing — correct, just slower.
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        return image.read_bytes(), mimetypes.guess_type(image.name)[0] or "image/png"
+    try:
+        with Image.open(image) as img:
             img = img.convert("RGB")
-            # Fit the canvas; these originals are up to 7000px wide and Tk would
-            # otherwise hold the whole thing as a bitmap.
-            preview = img.copy()
-            preview.thumbnail((self.CANVAS_W, self.CANVAS_H), Image.LANCZOS)
-            self.pil_size = img.size
-        self.pil = preview
-        self.scale = preview.width / self.pil_size[0]
-        self.off_x = (self.CANVAS_W - preview.width) // 2
-        self.off_y = (self.CANVAS_H - preview.height) // 2
-        self.photo = ImageTk.PhotoImage(preview)
+            img.thumbnail((box, box), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=88)
+            return buf.getvalue(), "image/jpeg"
+    except Exception:                               # noqa: BLE001
+        return image.read_bytes(), mimetypes.guess_type(image.name)[0] or "image/png"
 
-        self.canvas.delete("all")
-        self.canvas.create_image(self.off_x, self.off_y, anchor="nw",
-                                 image=self.photo, tags="img")
-        self.load_rect_for_display()
 
-    def on_pick(self, _event) -> None:
-        selection = self.listbox.curselection()
-        if selection:
-            self.load_image(self.images[selection[0]])
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_args):                  # quiet; this is a local tool
+        pass
 
-    # ------------------------------------------------------------------ rect
-    def aspect(self) -> float:
-        try:
-            w, h = self.display.get().lower().split("x")
-            return int(w) / int(h)
-        except (ValueError, ZeroDivisionError):
-            return 16 / 10
+    # ------------------------------------------------------------------ helpers
+    def _send(self, code: int, body: bytes, ctype: str) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
-    def image_box(self) -> tuple[int, int, int, int]:
-        """Canvas bounds of the displayed image."""
-        return (self.off_x, self.off_y,
-                self.off_x + self.pil.width, self.off_y + self.pil.height)
+    def _json(self, obj, code: int = 200) -> None:
+        self._send(code, json.dumps(obj).encode(), "application/json")
 
-    def reset_rect(self) -> None:
-        """Largest box of the target aspect that fits inside the image."""
-        x0, y0, x1, y1 = self.image_box()
-        iw, ih = x1 - x0, y1 - y0
-        aspect = self.aspect()
-        if iw / ih > aspect:          # image is wider than the display
-            h = ih
-            w = h * aspect
+    # ---------------------------------------------------------------------- GET
+    def do_GET(self) -> None:                       # noqa: N802 - stdlib API
+        url = urlparse(self.path)
+        query = parse_qs(url.query)
+
+        if url.path == "/":
+            self._send(200, PAGE.encode(), "text/html; charset=utf-8")
+        elif url.path == "/api/state":
+            images = list_images()
+            self._json({
+                "root": str(ROOT),
+                "current": current_display(),
+                "presets": PRESETS,
+                "images": [{"path": str(p), "name": p.name} for p in images],
+            })
+        elif url.path == "/api/image":
+            image = safe_image(query.get("path", [""])[0])
+            if not image:
+                self._json({"error": "not found"}, 404)
+                return
+            body, ctype = preview_bytes(image)
+            self._send(200, body, ctype)
+        elif url.path == "/api/marks":
+            # Which images already have an entry for this display. One request
+            # instead of 70, so the list can show progress without a stampede.
+            display = query.get("display", [""])[0]
+            configured = {}
+            for path in list_images():
+                entry = load_sidecar(path)["displays"].get(display)
+                if entry:
+                    configured[str(path)] = entry.get("fit", "max")
+            self._json({"display": display, "configured": configured})
+        elif url.path == "/api/config":
+            image = safe_image(query.get("path", [""])[0])
+            if not image:
+                self._json({"error": "not found"}, 404)
+                return
+            self._json(load_sidecar(image))
         else:
-            w = iw
-            h = w / aspect
-        self.rect = [x0 + (iw - w) / 2, y0 + (ih - h) / 2,
-                     x0 + (iw + w) / 2, y0 + (ih + h) / 2]
-        self.redraw()
+            self._json({"error": "not found"}, 404)
 
-    def load_rect_for_display(self) -> None:
-        """Restore a saved region for this display, else frame the whole image."""
-        data = load_sidecar(self.image)
-        entry = data["displays"].get(self.display.get())
-        if not entry or entry.get("fit") != "crop":
-            self.reset_rect()
-            self.status.set(f"{self.image.name} — {self.pil_size[0]}x{self.pil_size[1]}"
-                            f"  (no saved framing for {self.display.get()})")
-            return
-        x0, y0, x1, y1 = self.image_box()
-        iw, ih = x1 - x0, y1 - y0
-        self.rect = [x0 + entry["x"] * iw, y0 + entry["y"] * ih,
-                     x0 + (entry["x"] + entry["w"]) * iw,
-                     y0 + (entry["y"] + entry["h"]) * ih]
-        self.redraw()
-        self.status.set(f"{self.image.name} — saved framing for {self.display.get()}")
-
-    def on_display_change(self) -> None:
-        if self.image:
-            self.load_rect_for_display()
-
-    def redraw(self) -> None:
-        self.canvas.delete("sel")
-        x0, y0, x1, y1 = self.rect
-        # Dim everything outside the selection, so the framing reads at a glance.
-        bx0, by0, bx1, by1 = self.image_box()
-        for box in ((bx0, by0, bx1, y0), (bx0, y1, bx1, by1),
-                    (bx0, y0, x0, y1), (x1, y0, bx1, y1)):
-            self.canvas.create_rectangle(*box, fill="#000000", stipple="gray50",
-                                         outline="", tags="sel")
-        self.canvas.create_rectangle(x0, y0, x1, y1, outline="#78a9ff",
-                                     width=2, tags="sel")
-        for hx, hy in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
-            self.canvas.create_rectangle(hx - 4, hy - 4, hx + 4, hy + 4,
-                                         fill="#78a9ff", outline="", tags="sel")
-
-    # --------------------------------------------------------------- dragging
-    def on_press(self, event) -> None:
-        x0, y0, x1, y1 = self.rect
-        corners = {"nw": (x0, y0), "ne": (x1, y0), "sw": (x0, y1), "se": (x1, y1)}
-        for name, (cx, cy) in corners.items():
-            if abs(event.x - cx) <= self.HANDLE and abs(event.y - cy) <= self.HANDLE:
-                self.drag_mode = name
-                return
-        self.drag_mode = "move" if x0 <= event.x <= x1 and y0 <= event.y <= y1 else None
-        self.drag_from = (event.x, event.y)
-
-    def on_drag(self, event) -> None:
-        if not self.drag_mode:
-            return
-        bx0, by0, bx1, by1 = self.image_box()
-        if self.drag_mode == "move":
-            dx = event.x - self.drag_from[0]
-            dy = event.y - self.drag_from[1]
-            self.drag_from = (event.x, event.y)
-            w = self.rect[2] - self.rect[0]
-            h = self.rect[3] - self.rect[1]
-            # Clamp to the image, so you cannot frame empty canvas.
-            nx0 = min(max(self.rect[0] + dx, bx0), bx1 - w)
-            ny0 = min(max(self.rect[1] + dy, by0), by1 - h)
-            self.rect = [nx0, ny0, nx0 + w, ny0 + h]
-        else:
-            # Resize from the opposite corner, keeping the display's aspect.
-            anchor_x = self.rect[2] if "w" in self.drag_mode else self.rect[0]
-            anchor_y = self.rect[3] if "n" in self.drag_mode else self.rect[1]
-            w = abs(event.x - anchor_x)
-            h = w / self.aspect()
-            if h < 20:
-                return
-            nx0, nx1 = sorted((anchor_x, anchor_x + (w if event.x > anchor_x else -w)))
-            ny0, ny1 = sorted((anchor_y, anchor_y + (h if event.y > anchor_y else -h)))
-            # Refuse a box that leaves the image rather than silently cropping
-            # to nothing at the edge.
-            if nx0 < bx0 or ny0 < by0 or nx1 > bx1 or ny1 > by1:
-                return
-            self.rect = [nx0, ny0, nx1, ny1]
-        self.redraw()
-
-    def nudge(self, dx: int, dy: int) -> None:
-        if not self.image:
-            return
-        self.drag_mode = "move"
-        self.drag_from = (0, 0)
-        bx0, by0, bx1, by1 = self.image_box()
-        w = self.rect[2] - self.rect[0]
-        h = self.rect[3] - self.rect[1]
-        nx0 = min(max(self.rect[0] + dx, bx0), bx1 - w)
-        ny0 = min(max(self.rect[1] + dy, by0), by1 - h)
-        self.rect = [nx0, ny0, nx0 + w, ny0 + h]
-        self.drag_mode = None
-        self.redraw()
-
-    # ----------------------------------------------------------------- saving
-    def as_fractions(self) -> dict:
-        bx0, by0, bx1, by1 = self.image_box()
-        iw, ih = bx1 - bx0, by1 - by0
-        return {
-            "fit": "crop",
-            "x": round((self.rect[0] - bx0) / iw, 4),
-            "y": round((self.rect[1] - by0) / ih, 4),
-            "w": round((self.rect[2] - self.rect[0]) / iw, 4),
-            "h": round((self.rect[3] - self.rect[1]) / ih, 4),
-        }
-
-    def save(self) -> None:
-        if not self.image:
-            return
-        data = load_sidecar(self.image)
-        data["displays"][self.display.get()] = self.as_fractions()
-        save_sidecar(self.image, data)
-        self.status.set(f"Saved {self.display.get()} -> {sidecar_for(self.image).name}")
-
-    def save_apply(self) -> None:
-        self.save()
-        if not self.image:
-            return
-        script = Path(__file__).resolve().parent / "wallpaper"
+    # --------------------------------------------------------------------- POST
+    def do_POST(self) -> None:                      # noqa: N802 - stdlib API
+        url = urlparse(self.path)
+        length = int(self.headers.get("Content-Length", 0))
         try:
-            subprocess.run([str(script), "set", str(self.image)], timeout=60, check=False)
-            self.status.set(f"Applied {self.image.name}")
-        except Exception as exc:                 # noqa: BLE001
-            self.status.set(f"Could not apply: {exc}")
-
-    def clear(self) -> None:
-        """Forget this display's framing — the image falls back to whole-image fit."""
-        if not self.image:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._json({"error": "bad json"}, 400)
             return
-        data = load_sidecar(self.image)
-        if data["displays"].pop(self.display.get(), None) is not None:
-            save_sidecar(self.image, data)
-        self.reset_rect()
-        self.status.set(f"Cleared framing for {self.display.get()}")
+
+        image = safe_image(payload.get("path", ""))
+        if not image:
+            self._json({"error": "not found"}, 404)
+            return
+
+        if url.path == "/api/save":
+            display = str(payload.get("display", "")).strip()
+            if not re.fullmatch(r"\d{2,5}x\d{2,5}", display):
+                self._json({"error": "bad display"}, 400)
+                return
+            entry = payload.get("entry")
+            data = load_sidecar(image)
+            if entry is None:
+                data["displays"].pop(display, None)
+            else:
+                data["displays"][display] = entry
+            sidecar_for(image).write_text(json.dumps(data, indent=2) + "\n")
+            self._json({"ok": True, "sidecar": str(sidecar_for(image))})
+
+        elif url.path == "/api/apply":
+            try:
+                subprocess.run([str(SCRIPT_DIR / "wallpaper"), "set", str(image)],
+                               timeout=120, check=False)
+                self._json({"ok": True})
+            except Exception as exc:                # noqa: BLE001
+                self._json({"error": str(exc)}, 500)
+        else:
+            self._json({"error": "not found"}, 404)
+
+
+PAGE = r"""<!doctype html>
+<meta charset="utf-8">
+<title>Wallpaper framing</title>
+<style>
+  :root {
+    --bg:#161616; --panel:#1f1f22; --line:#2a2a2e; --fg:#f2f4f8;
+    --mut:#8b8b90; --accent:#78a9ff; --ok:#25be6a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; height:100vh; display:flex; background:var(--bg); color:var(--fg);
+         font:13px/1.5 "JetBrains Mono", ui-monospace, monospace; overflow:hidden; }
+
+  aside { width:250px; flex:none; border-right:1px solid var(--line);
+          display:flex; flex-direction:column; }
+  aside h2 { margin:0; padding:10px 12px; font-size:11px; color:var(--mut);
+             border-bottom:1px solid var(--line); font-weight:normal; }
+  #list { overflow-y:auto; flex:1; }
+  #list div { padding:5px 12px; cursor:pointer; white-space:nowrap;
+              overflow:hidden; text-overflow:ellipsis; border-left:3px solid transparent; }
+  #list div:hover { background:var(--panel); }
+  #list div.sel { background:var(--panel); border-left-color:var(--accent); }
+  #list div.has { color:var(--ok); }
+
+  main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .bar { display:flex; gap:8px; align-items:center; padding:8px 12px;
+         border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  select, button {
+    background:var(--panel); color:var(--fg); border:1px solid var(--line);
+    border-radius:4px; padding:4px 8px; font:inherit; cursor:pointer;
+  }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+  label { color:var(--mut); }
+
+  /* The frame IS the screen. It never moves; the image moves behind it. */
+  #stageWrap { flex:1; display:grid; place-items:center; overflow:hidden; padding:20px; }
+  #frame { position:relative; overflow:hidden; background:#000;
+           box-shadow:0 0 0 1px var(--line), 0 0 0 9999px rgba(10,10,10,.62);
+           cursor:grab; touch-action:none; }
+  #frame.grabbing { cursor:grabbing; }
+  #frame img { position:absolute; transform-origin:0 0; display:block;
+               image-rendering:auto; user-select:none; -webkit-user-drag:none; }
+  #tile { position:absolute; inset:0; background-repeat:repeat; }
+  #hint { position:absolute; left:0; right:0; bottom:0; padding:4px 8px;
+          background:rgba(0,0,0,.55); color:var(--mut); font-size:11px;
+          pointer-events:none; }
+  #status { padding:7px 12px; border-top:1px solid var(--line); color:var(--mut);
+            display:flex; gap:16px; }
+  #count { color:var(--ok); }
+  .hide { display:none !important; }
+  kbd { background:var(--panel); border:1px solid var(--line); border-radius:3px;
+        padding:0 4px; color:var(--fg); }
+</style>
+
+<aside>
+  <h2 id="root">images</h2>
+  <div id="list"></div>
+</aside>
+
+<main>
+  <div class="bar">
+    <label>display</label><select id="display"></select>
+    <label>fit</label>
+    <select id="fit">
+      <option value="crop">Crop — pan &amp; zoom</option>
+      <option value="fill">Fill Screen</option>
+      <option value="max">Fit to Screen</option>
+      <option value="stretch">Stretch to Fill</option>
+      <option value="center">Center</option>
+      <option value="tile">Tile</option>
+    </select>
+    <span id="zoomWrap" class="hide">
+      <label>scale</label><span id="zoomVal">100%</span>
+    </span>
+    <button id="reset">reset</button>
+    <button id="clear">clear</button>
+    <button id="apply">apply</button>
+    <button id="next" class="primary">save + next &nbsp;<kbd>space</kbd></button>
+  </div>
+
+  <div id="stageWrap">
+    <div id="frame">
+      <img id="img" alt="">
+      <div id="tile" class="hide"></div>
+      <div id="hint">drag to pan · scroll to zoom · <kbd>space</kbd> save+next · <kbd>0</kbd> reset</div>
+    </div>
+  </div>
+
+  <div id="status">
+    <span id="msg">loading…</span>
+    <span id="count"></span>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let state = null, image = null, cfg = null, idx = 0;
+
+// View transform: the image is drawn at `scale`, with its top-left at (ox, oy)
+// relative to the frame's top-left. The frame is the screen, so this is exactly
+// "which part of the photo is visible" — and converting it to a stored crop is
+// pure arithmetic, no separate rectangle to keep in sync.
+let scale = 1, ox = 0, oy = 0;
+let nat = {w:1, h:1};        // natural size of the preview we loaded
+
+const msg = t => $("#msg").textContent = t;
+const dispWH = () => $("#display").value.split("x").map(Number);
+
+// Frame size on screen: the display's aspect, as large as fits the stage.
+function sizeFrame() {
+  const [dw, dh] = dispWH();
+  const pad = 40;
+  const availW = $("#stageWrap").clientWidth - pad;
+  const availH = $("#stageWrap").clientHeight - pad;
+  let w = availW, h = w * dh / dw;
+  if (h > availH) { h = availH; w = h * dw / dh; }
+  $("#frame").style.width = Math.round(w) + "px";
+  $("#frame").style.height = Math.round(h) + "px";
+}
+
+async function boot() {
+  state = await (await fetch("/api/state")).json();
+  $("#root").textContent = state.root;
+  const opts = [state.current, ...state.presets.filter(p => p !== state.current)];
+  $("#display").innerHTML = opts.map(d =>
+    `<option ${d === state.current ? "selected" : ""}>${d}</option>`).join("");
+  $("#list").innerHTML = state.images.map((im, i) =>
+    `<div data-i="${i}" title="${im.name}">${im.name}</div>`).join("");
+  $("#list").onclick = e => { const d = e.target.closest("[data-i]"); if (d) pick(+d.dataset.i); };
+  sizeFrame();
+  if (state.images.length) { await refreshMarks(); pick(0); }
+  else msg("No images under " + state.root);
+}
+
+// Which images already have framing for this display — so you can see what is
+// left across 70 files, and skip the ones that are done.
+async function refreshMarks() {
+  const d = $("#display").value;
+  const marks = await (await fetch("/api/marks?display=" + encodeURIComponent(d))).json();
+  let done = 0;
+  [...$("#list").children].forEach((el, i) => {
+    const has = marks.configured[state.images[i].path];
+    el.classList.toggle("has", !!has);
+    if (has) done++;
+  });
+  $("#count").textContent = `${done}/${state.images.length} framed for ${d}`;
+}
+
+async function pick(i) {
+  idx = Math.max(0, Math.min(i, state.images.length - 1));
+  image = state.images[idx];
+  [...$("#list").children].forEach((d, j) => d.classList.toggle("sel", j === idx));
+  $("#list").children[idx]?.scrollIntoView({block:"nearest"});
+
+  const img = $("#img");
+  await new Promise(res => {
+    img.onload = res; img.onerror = res;
+    img.src = "/api/image?path=" + encodeURIComponent(image.path);
+  });
+  nat = {w: img.naturalWidth, h: img.naturalHeight};
+  cfg = await (await fetch("/api/config?path=" + encodeURIComponent(image.path))).json();
+  loadEntry();
+}
+
+// Smallest scale at which the image still covers the whole frame. Also the
+// lower bound while panning, so a crop can never include empty space.
+function coverScale() {
+  const f = $("#frame");
+  return Math.max(f.clientWidth / nat.w, f.clientHeight / nat.h);
+}
+
+function clamp() {
+  const f = $("#frame");
+  const w = nat.w * scale, h = nat.h * scale;
+  ox = Math.min(0, Math.max(ox, f.clientWidth - w));
+  oy = Math.min(0, Math.max(oy, f.clientHeight - h));
+  if (w < f.clientWidth) ox = (f.clientWidth - w) / 2;
+  if (h < f.clientHeight) oy = (f.clientHeight - h) / 2;
+}
+
+function draw() {
+  clamp();
+  $("#img").style.transform = `translate(${ox}px, ${oy}px) scale(${scale})`;
+  $("#img").style.width = nat.w + "px";
+  $("#img").style.height = nat.h + "px";
+  const z = Math.round(scale / coverScale() * 100);
+  $("#zoomVal").textContent = z + "%";
+}
+
+function resetView() {
+  scale = coverScale();
+  const f = $("#frame");
+  ox = (f.clientWidth - nat.w * scale) / 2;
+  oy = (f.clientHeight - nat.h * scale) / 2;
+  draw();
+}
+
+// View -> stored crop. Fractions of the image, so a rescaled copy of the same
+// photo keeps its framing.
+function cropFromView() {
+  const f = $("#frame");
+  const w = nat.w * scale, h = nat.h * scale;
+  return {
+    fit: "crop",
+    x: +Math.max(0, -ox / w).toFixed(4),
+    y: +Math.max(0, -oy / h).toFixed(4),
+    w: +Math.min(1, f.clientWidth / w).toFixed(4),
+    h: +Math.min(1, f.clientHeight / h).toFixed(4),
+  };
+}
+
+// Stored crop -> view, so reopening an image shows exactly what you framed.
+function viewFromCrop(e) {
+  const f = $("#frame");
+  scale = f.clientWidth / (e.w * nat.w);
+  ox = -e.x * nat.w * scale;
+  oy = -e.y * nat.h * scale;
+  draw();
+}
+
+function loadEntry() {
+  const entry = (cfg.displays || {})[$("#display").value];
+  $("#fit").value = entry?.fit || "crop";
+  if (entry?.fit === "crop") viewFromCrop(entry);
+  else resetView();
+  if (entry && (entry.fit === "tile" || entry.fit === "center") && entry.zoom)
+    scale = coverScale() * entry.zoom, draw();
+  onFit();
+  msg(entry ? `${image.name} — saved ${entry.fit}` : `${image.name} — unset`);
+}
+
+function onFit() {
+  const fit = $("#fit").value;
+  const isCrop = fit === "crop";
+  const hasZoom = fit === "tile" || fit === "center";
+  $("#img").classList.toggle("hide", fit === "tile");
+  $("#tile").classList.toggle("hide", fit !== "tile");
+  $("#zoomWrap").classList.toggle("hide", !(isCrop || hasZoom));
+  $("#frame").style.cursor = isCrop ? "grab" : "default";
+  if (fit === "tile") {
+    const z = scale / coverScale();
+    $("#tile").style.backgroundImage = `url(${$("#img").src})`;
+    $("#tile").style.backgroundSize = `${nat.w * coverScale() * z}px auto`;
+  }
+  if (fit === "max" || fit === "fill" || fit === "stretch") resetView();
+}
+
+function entryFromUI() {
+  const fit = $("#fit").value;
+  if (fit === "crop") return cropFromView();
+  if (fit === "tile" || fit === "center")
+    return {fit, zoom: +(scale / coverScale()).toFixed(3)};
+  return {fit};
+}
+
+async function save() {
+  const entry = entryFromUI(), display = $("#display").value;
+  const r = await (await fetch("/api/save", {method:"POST", body: JSON.stringify(
+    {path: image.path, display, entry})})).json();
+  if (r.error) { msg("error: " + r.error); return false; }
+  cfg.displays = cfg.displays || {};
+  cfg.displays[display] = entry;
+  $("#list").children[idx].classList.add("has");
+  const done = [...$("#list").children].filter(e => e.classList.contains("has")).length;
+  $("#count").textContent = `${done}/${state.images.length} framed for ${display}`;
+  return true;
+}
+
+async function apply() {
+  if (!await save()) return;
+  msg("applying…");
+  const a = await (await fetch("/api/apply", {method:"POST",
+    body: JSON.stringify({path: image.path})})).json();
+  msg(a.error ? "apply failed: " + a.error : `applied ${image.name}`);
+}
+
+// ----- pan and zoom --------------------------------------------------------
+let drag = null;
+$("#frame").addEventListener("pointerdown", e => {
+  if ($("#fit").value !== "crop") return;
+  drag = {x: e.clientX, y: e.clientY, ox, oy};
+  $("#frame").classList.add("grabbing");
+  $("#frame").setPointerCapture(e.pointerId);
+});
+addEventListener("pointermove", e => {
+  if (!drag) return;
+  ox = drag.ox + (e.clientX - drag.x);
+  oy = drag.oy + (e.clientY - drag.y);
+  draw();
+});
+addEventListener("pointerup", () => { drag = null; $("#frame").classList.remove("grabbing"); });
+
+// Zoom at the cursor, not the centre — otherwise zooming in on a detail walks
+// it off screen and you have to chase it with the mouse.
+$("#frame").addEventListener("wheel", e => {
+  e.preventDefault();
+  const fit = $("#fit").value;
+  const rect = $("#frame").getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const factor = Math.exp(-e.deltaY * 0.0015);
+  const min = fit === "crop" ? coverScale() : coverScale() * 0.05;
+  const next = Math.min(Math.max(scale * factor, min), coverScale() * 12);
+  // Keep the pixel under the cursor fixed.
+  ox = mx - (mx - ox) * (next / scale);
+  oy = my - (my - oy) * (next / scale);
+  scale = next;
+  draw();
+  if (fit === "tile" || fit === "center") onFit();
+}, {passive:false});
+
+// ----- keyboard: the whole point, with ~70 images to get through ------------
+addEventListener("keydown", async e => {
+  if (e.target.tagName === "SELECT") return;
+  const step = e.shiftKey ? 60 : 15;
+  switch (e.key) {
+    case " ":  e.preventDefault(); if (await save()) pick(idx + 1); return;
+    case "Enter": e.preventDefault(); apply(); return;
+    case "0": resetView(); return;
+  }
+  if (e.key === "]" || e.key === "n") { pick(idx + 1); return; }
+  if (e.key === "[" || e.key === "p") { pick(idx - 1); return; }
+  if ($("#fit").value !== "crop") return;
+  const moves = {ArrowLeft:[step,0], ArrowRight:[-step,0], ArrowUp:[0,step], ArrowDown:[0,-step]};
+  const m = moves[e.key];
+  if (m) { ox += m[0]; oy += m[1]; draw(); e.preventDefault(); }
+});
+
+$("#display").onchange = async () => { sizeFrame(); await refreshMarks(); loadEntry(); };
+$("#fit").onchange = onFit;
+$("#reset").onclick = resetView;
+$("#apply").onclick = apply;
+$("#next").onclick = async () => { if (await save()) pick(idx + 1); };
+$("#clear").onclick = async () => {
+  await fetch("/api/save", {method:"POST", body: JSON.stringify(
+    {path: image.path, display: $("#display").value, entry: null})});
+  delete (cfg.displays || {})[$("#display").value];
+  $("#list").children[idx].classList.remove("has");
+  resetView(); msg("cleared " + $("#display").value);
+};
+addEventListener("resize", () => { sizeFrame(); draw(); });
+
+boot();
+</script>
+"""
 
 
 def main() -> None:
-    preselect = Path(sys.argv[1]) if len(sys.argv) > 1 else None
-    Configurator(preselect).mainloop()
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--port", type=int, default=8731)
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="0.0.0.0 to reach it from another machine")
+    parser.add_argument("--no-open", action="store_true")
+    args = parser.parse_args()
+
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    url = f"http://{'127.0.0.1' if args.host == '0.0.0.0' else args.host}:{args.port}/"
+    print(f"Wallpaper framing on {url}   (images: {ROOT})")
+    print("Ctrl+C to stop.")
+    if not args.no_open:
+        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
 
 
 if __name__ == "__main__":

@@ -91,9 +91,9 @@ info "Using checkout at $DOTFILES"
 #   imagemagick jq       wallpaper framing: jq reads the per-image sidecar,
 #                        ImageMagick composites the chosen crop at exactly the
 #                        screen resolution (feh cannot crop to a rectangle)
-#   python3-tk pil       the framing GUI (wallpaper-config). imagetk is the
-#                        separate package and is what actually draws the photo
-#                        on the canvas — PIL alone is not enough
+#   python3-pil          downscales previews for the framing web app, so the
+#                        browser is not handed a 7000px original. Optional — it
+#                        falls back to serving the raw file
 #   libportaudio2        the shared library sounddevice dlopens; without it
 #                        Lyrebird's mic capture falls back or fails to import
 #   arandr pavucontrol   GUI display/audio settings, since GNOME's are gone
@@ -102,7 +102,7 @@ PKGS="i3 i3status i3lock rofi dunst brightnessctl xss-lock dex \
 network-manager-gnome blueman policykit-1-gnome flameshot xclip xdotool \
 gnome-calculator libportaudio2 \
 arandr pavucontrol feh fonts-jetbrains-mono fonts-noto-color-emoji mosh picom \
-imagemagick jq python3-tk python3-pil python3-pil.imagetk"
+imagemagick jq python3-pil"
 
 info "Installing desktop packages…"
 $SUDO apt-get update -y

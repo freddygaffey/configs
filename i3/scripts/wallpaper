@@ -109,39 +109,81 @@ display_size() {
     }'
 }
 
-# If the image has a sidecar with a crop for this display, render exactly that
-# region at exactly the screen resolution and print the cached path. Print
-# nothing if there is no sidecar, no entry, or the tools are missing — callers
-# fall back to plain feh fitting.
+# Work out how this image should be placed on this display, and print
 #
-# feh cannot do this itself: --bg-max and --bg-fill choose the framing for you,
-# and neither can be told "use this rectangle". So the crop is composited with
-# ImageMagick and feh is handed a file that already matches the screen exactly.
+#     <feh flag><TAB><path to use>
 #
-# Results are cached, keyed by image + mtime + display + rectangle. Cropping a
-# 7000px original takes a second or so, which would otherwise be paid on every
-# `next`, every mode switch and every i3 restart.
-crop_for_display() {
+# Prints nothing when there is no sidecar or no entry for this display, and the
+# caller falls back to the global fit.
+#
+# Supported fits, and which of them need ImageMagick:
+#
+#   max       whole image, letterboxed          feh --bg-max      (no render)
+#   fill      cover the screen, crop overflow   feh --bg-fill     (no render)
+#   stretch   distort to exactly fill           feh --bg-scale    (no render)
+#   tile      repeat across the screen          feh --bg-tile     (render if zoom)
+#   center    place at a chosen scale           feh --bg-center   (render if zoom)
+#   crop      a chosen rectangle fills the screen                 (always renders)
+#
+# feh handles four of those on its own, so only the two that need pixels changed
+# pay any cost. What feh CANNOT do is crop to a given rectangle, or resize before
+# tiling — hence ImageMagick for `crop`, and for `tile`/`center` whenever zoom is
+# not 1.0.
+#
+# `zoom` is the shrink/expand factor: 0.5 halves the image before tiling (four
+# times as many repeats), 2.0 doubles it before centring.
+#
+# Renders are cached on image + mtime + display + the whole entry. Cropping a
+# 5616x3143 original takes ~2.9s against ~0.19s cached, and that cost would
+# otherwise land on every next/prev, every mode switch and every i3 restart.
+render_for_display() {
     image="$1"
     sidecar="$image.json"
     [ -r "$sidecar" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
-    command -v convert >/dev/null 2>&1 || return 0
 
     disp=$(display_size)
     [ -n "$disp" ] || return 0
 
-    entry=$(jq -r --arg d "$disp" '
-        .displays[$d] // empty
-        | select(.fit == "crop")
-        | "\(.x) \(.y) \(.w) \(.h)"' "$sidecar" 2>/dev/null)
+    entry=$(jq -rc --arg d "$disp" '.displays[$d] // empty' "$sidecar" 2>/dev/null)
     [ -n "$entry" ] || return 0
+
+    fit=$(printf '%s' "$entry" | jq -r '.fit // "max"')
+    zoom=$(printf '%s' "$entry" | jq -r '.zoom // 1')
+
+    # The fits feh does natively: hand back the original, untouched.
+    case "$fit" in
+        max)     printf '%s\t%s' --bg-max   "$image"; return 0 ;;
+        fill)    printf '%s\t%s' --bg-fill  "$image"; return 0 ;;
+        stretch) printf '%s\t%s' --bg-scale "$image"; return 0 ;;
+        tile)
+            # Zoom of 1 means plain tiling, which feh does by itself.
+            case "$zoom" in
+                1|1.0|1.00) printf '%s\t%s' --bg-tile "$image"; return 0 ;;
+            esac
+            ;;
+        center)
+            case "$zoom" in
+                1|1.0|1.00) printf '%s\t%s' --bg-center "$image"; return 0 ;;
+            esac
+            ;;
+    esac
+
+    # Everything past here needs pixels changed.
+    command -v convert >/dev/null 2>&1 || return 0
 
     mtime=$(stat -c %Y "$image" 2>/dev/null || echo 0)
     key=$(printf '%s %s %s %s' "$image" "$mtime" "$disp" "$entry" | sha1sum | cut -c1-16)
     cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/i3-wallpaper"
     out="$cache_dir/$key.png"
-    [ -r "$out" ] && { printf '%s' "$out"; return 0; }
+
+    case "$fit" in
+        tile)   flag=--bg-tile ;;
+        center) flag=--bg-center ;;
+        *)      flag=--bg-center ;;      # crop renders to exactly screen size
+    esac
+
+    [ -r "$out" ] && { printf '%s\t%s' "$flag" "$out"; return 0; }
     mkdir -p "$cache_dir"
 
     # [0] so a multi-frame file (animated webp, multi-page tiff) uses one frame
@@ -150,21 +192,32 @@ crop_for_display() {
     iw=${dims% *}; ih=${dims#* }
     dw=${disp%x*}; dh=${disp#*x}
 
-    # Fractions -> pixels. awk because sh arithmetic is integer only.
-    geom=$(awk -v iw="$iw" -v ih="$ih" -v e="$entry" 'BEGIN {
-        split(e, f, " ")
-        cw = int(f[3] * iw); ch = int(f[4] * ih)
-        cx = int(f[1] * iw); cy = int(f[2] * ih)
-        if (cw < 1) cw = 1; if (ch < 1) ch = 1
-        printf "%dx%d+%d+%d", cw, ch, cx, cy
-    }')
+    ok=0
+    if [ "$fit" = crop ]; then
+        x=$(printf '%s' "$entry" | jq -r '.x // 0')
+        y=$(printf '%s' "$entry" | jq -r '.y // 0')
+        w=$(printf '%s' "$entry" | jq -r '.w // 1')
+        h=$(printf '%s' "$entry" | jq -r '.h // 1')
+        # Fractions -> pixels. awk because sh arithmetic is integer only.
+        geom=$(awk -v iw="$iw" -v ih="$ih" -v x="$x" -v y="$y" -v w="$w" -v h="$h" 'BEGIN {
+            cw = int(w * iw); ch = int(h * ih)
+            if (cw < 1) cw = 1; if (ch < 1) ch = 1
+            printf "%dx%d+%d+%d", cw, ch, int(x * iw), int(y * ih)
+        }')
+        # -resize ^ then -extent: fill the screen and trim the half-pixel
+        # remainder, so the output is exactly dw x dh and feh never rescales it.
+        convert "$image[0]" -crop "$geom" +repage \
+                -resize "${dw}x${dh}^" -gravity center -extent "${dw}x${dh}" \
+                "$out" 2>/dev/null && ok=1
+    else
+        # tile / center with a zoom: scale the image itself, then let feh place
+        # or repeat it. Percentage resize keeps the aspect ratio.
+        pct=$(awk -v z="$zoom" 'BEGIN { printf "%.4f", z * 100 }')
+        convert "$image[0]" -resize "${pct}%" "$out" 2>/dev/null && ok=1
+    fi
 
-    # -resize ^ then -extent: fill the screen and trim any half-pixel remainder,
-    # so the output is exactly dw x dh and feh never rescales it.
-    if convert "$image[0]" -crop "$geom" +repage \
-               -resize "${dw}x${dh}^" -gravity center -extent "${dw}x${dh}" \
-               "$out" 2>/dev/null; then
-        printf '%s' "$out"
+    if [ "$ok" = 1 ]; then
+        printf '%s\t%s' "$flag" "$out"
     else
         rm -f "$out"
     fi
@@ -178,19 +231,25 @@ apply() {
             *)    mode=--bg-max  ;;
         esac
 
-        # Per-display framing wins when configured. The rendered file is already
-        # exactly screen-sized, so --bg-center places it 1:1 with no rescaling.
-        rendered=$(crop_for_display "$image" 2>/dev/null || true)
-        if [ -n "$rendered" ] && [ -r "$rendered" ]; then
-            feh --no-fehbg --bg-center "$rendered" >/dev/null 2>&1 \
-                && printf '%s\n' "$image" > "$STATE"
-            return 0
-        fi
         # --image-bg sets the letterbox colour, so the bars match the theme
         # instead of defaulting to black.
         theme=$( [ "$(mode)" = fly ] && echo dayfox || \
                  { [ "$(mode)" = light ] && echo nightfox || echo carbonfox; } )
         bg=$(sed -n 's/^bg=//p' "$REPO/themes/$theme.env" 2>/dev/null | head -1)
+
+        # Per-display framing wins when configured. It hands back both the feh
+        # flag and the file to use, since the fit decides the flag — a tiled
+        # wallpaper needs --bg-tile, a crop needs --bg-center.
+        placement=$(render_for_display "$image" 2>/dev/null || true)
+        if [ -n "$placement" ]; then
+            flag=${placement%%	*}
+            target=${placement#*	}
+            if [ -r "$target" ]; then
+                feh --no-fehbg --image-bg "${bg:-#161616}" "$flag" "$target" \
+                    >/dev/null 2>&1 && printf '%s\n' "$image" > "$STATE"
+                return 0
+            fi
+        fi
         # --no-fehbg: feh would otherwise write ~/.fehbg, which competes with
         # this script's own state file for "what is the current wallpaper".
         feh --no-fehbg --image-bg "${bg:-#161616}" "$mode" "$image" >/dev/null 2>&1 \
