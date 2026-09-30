@@ -312,6 +312,63 @@ offer() {
   esac
 }
 
+# Lock screen contact details. Asked rather than templated because they are
+# personal — a real name and phone number — and this repo is public, so the file
+# lives in ~/.config and never in git. Without it the lock screen is just the
+# wallpaper, which works fine; this only adds the "please return this" notice.
+prompt_lockscreen_contact() {
+  contact="$HOME/.config/lockscreen-contact"
+  if [ -s "$contact" ] && ! grep -q 'example\.com' "$contact" 2>/dev/null; then
+    info "lock screen contact details already set ($contact)"
+    return 0
+  fi
+  if [ ! -e /dev/tty ]; then
+    info "No terminal — skipping lock screen contact details. See lockscreen-contact.example."
+    return 0
+  fi
+
+  cat <<'INTRO' > /dev/tty
+
+  ─── Lock screen ────────────────────────────────────────────────────
+
+  Shown over the wallpaper when the screen is locked, so whoever finds
+  the laptop knows how to return it. Left blank, the lock screen is just
+  the wallpaper.
+
+  Stored in ~/.config/lockscreen-contact, NOT in this repo — it is public
+  and this carries a real name and number.
+
+INTRO
+
+  printf '  Add contact details now? [y/N] ' > /dev/tty
+  read -r reply < /dev/tty || return 0
+  case "$reply" in
+    y | Y | yes | YES) ;;
+    *)
+      info "Skipped — copy lockscreen-contact.example to $contact whenever you like."
+      return 0
+      ;;
+  esac
+
+  printf '  Name or message [If found, please contact]: ' > /dev/tty
+  read -r who < /dev/tty || return 0
+  [ -n "$who" ] || who="If found, please contact"
+  printf '  Email (blank to skip): ' > /dev/tty
+  read -r mail < /dev/tty || true
+  printf '  Phone (blank to skip): ' > /dev/tty
+  read -r phone < /dev/tty || true
+
+  mkdir -p "$(dirname "$contact")"
+  {
+    printf '%s\n' "$who"
+    [ -n "${mail:-}" ]  && printf '%s\n' "$mail"
+    [ -n "${phone:-}" ] && printf '%s\n' "$phone"
+  } > "$contact"
+  chmod 600 "$contact"
+  info "wrote $contact — edit it any time, the lock screen picks it up automatically"
+}
+prompt_lockscreen_contact
+
 offer_system_scripts() {
   if [ ! -e /dev/tty ]; then
     info "No terminal — skipping host-level setup. See system/."
