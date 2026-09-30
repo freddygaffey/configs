@@ -5,11 +5,15 @@
 # breaks on a box where it isn't installed — you get a $mod+Return that silently
 # does nothing, with no terminal available to debug it from. So resolve here.
 #
-# Order is deliberate: Ghostty is the daily driver (same terminal as the Mac, and
-# the repo ships its terminfo), kitty is the installed fallback, and
-# x-terminal-emulator is the Debian alternatives system's answer — whatever that
-# points at will at least open.
-for t in ghostty kitty alacritty wezterm x-terminal-emulator xterm; do
+# Order is deliberate. kitty first: it is the only one of these that can repaint
+# a running window's palette (`kitty @ set-colors`), which is what makes the
+# light/dark/fly switch instant rather than "restart your terminals". It also
+# speaks the kitty graphics protocol natively, which the tmux `prefix + i` image
+# popup needs, and runs on macOS so both machines match.
+#
+# Ghostty stays as the first fallback — it is a fine terminal, it just cannot
+# reload its config programmatically, which its own man page is explicit about.
+for t in kitty ghostty alacritty wezterm x-terminal-emulator xterm; do
     if command -v "$t" >/dev/null 2>&1; then
         exec "$t" "$@"
     fi

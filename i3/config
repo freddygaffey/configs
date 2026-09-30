@@ -90,6 +90,11 @@ exec_always --no-startup-id ~/.config/i3/scripts/refresh-rate-daemon
 exec --no-startup-id sh -c '[ -x "$HOME/lyrebird/.venv/bin/python" ] && cd "$HOME/lyrebird" && exec ./.venv/bin/python src/dictate.py --daemon'
 
 # ── Look — carbonfox, matching tmux/nvim ───────────────────────────────
+# Deliberately inline. Splitting the palette into an included file does not work:
+# i3's `include` does not make the included file's variables visible to the
+# including file, so every client.* and bar colour came back as "Could not parse
+# color: $accent". i3 colours therefore stay fixed, and ui-mode recolours GTK,
+# the terminal and nvim instead — which is where the screen area actually is.
 set $bg      #161616
 set $fg      #f2f4f8
 set $accent  #78a9ff
@@ -264,6 +269,14 @@ bindsym XF86AudioMicMute      exec --no-startup-id pactl set-source-mute @DEFAUL
 # way to do the same thing.
 bindsym XF86Launch1 exec --no-startup-id ~/.config/i3/scripts/cycle-power-profile
 bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profile
+
+# UI mode: dark -> light -> fly -> dark.
+#   dark   everything dark
+#   light  light apps, dark terminal and editor
+#   fly    everything light, for working outdoors in glare
+# GTK apps, kitty and any running nvim all change immediately; i3's own colours
+# do not, since its palette cannot be swapped without a restart.
+bindsym $mod+Shift+t exec --no-startup-id ~/.config/i3/scripts/ui-mode cycle
 
 # Screenshots — flameshot, on the Print key (next to Delete).
 #   Print              drag a region with the annotation toolbar — the common

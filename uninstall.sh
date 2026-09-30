@@ -43,6 +43,7 @@ unlink_restore "$HOME/.config/i3/i3status.conf"
 unlink_restore "$HOME/.config/i3/scripts"
 unlink_restore "$HOME/.config/ghostty/config"
 unlink_restore "$HOME/.Xresources"
+unlink_restore "$HOME/.config/kitty/kitty.conf"
 
 # Take the git-prompt source line (and its comment) back out of the shell rc
 # files — the bootstrap appended it there. Rewrites the file in place so the

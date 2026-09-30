@@ -23,7 +23,20 @@ vim.g.maplocalleader = ' '
 -- Single place to change the colorscheme. Any nightfox variant works
 -- (carbonfox, nightfox, duskfox, nordfox, terafox, dayfox, dawnfox). The
 -- statusline (lualine) and the fuzzy finder (telescope) both follow this.
-local theme = 'carbonfox'
+-- Read the desktop-wide UI mode, if one has been set. i3/scripts/ui-mode writes
+-- the colorscheme name here so the terminal, GTK apps and nvim agree — the point
+-- being "fly" mode, where everything goes light for glare. Falls back to
+-- carbonfox, so this file still works on a machine with no ui-mode script (the
+-- Mac, a server) and the <leader>th picker still overrides it at any time.
+local function ui_theme(default)
+  local ok, lines = pcall(vim.fn.readfile, vim.fn.expand('~/.config/ui-theme'))
+  if ok and lines and lines[1] and lines[1] ~= '' then
+    return vim.trim(lines[1])
+  end
+  return default
+end
+
+local theme = ui_theme('carbonfox')
 
 -- ─── Keep tmux's colours in sync with the nvim theme ──────────────────
 -- When running inside tmux, push the active colorscheme's colours into tmux on

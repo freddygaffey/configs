@@ -1,0 +1,109 @@
+#!/usr/bin/env sh
+# Switch the whole desktop between three looks.
+#
+#   ui-mode dark     everything dark
+#   ui-mode light    light apps, dark terminal and editor — reading and browsing
+#                    without the terminal turning into a lamp
+#   ui-mode fly       everything light, including terminal and editor — for
+#                    working outdoors in glare
+#   ui-mode cycle    dark -> light -> fly -> dark
+#   ui-mode status   print the current mode
+#
+# "light" is the awkward one and the reason this exists at all: it is why the
+# usual trick of following the system colour scheme does not work. GTK apps and
+# the terminal have to disagree, so each is set explicitly.
+#
+# Applies to running programs where it can, so a switch is immediate:
+#   GTK    gsettings, picked up live by running apps
+#   kitty  `kitty @ set-colors` repaints open windows
+#   nvim   :colorscheme pushed to every running instance over its RPC socket
+#
+# i3 itself is not recoloured. Its palette cannot be swapped without a restart:
+# i3's `include` does not expose the included file's variables to the including
+# file, so a split-out palette leaves every colour unparsed.
+
+set -eu
+
+MODE_FILE="$HOME/.config/ui-mode"
+THEME_FILE="$HOME/.config/ui-theme"     # read by nvim at startup
+KITTY_THEME="$HOME/.config/kitty/theme.conf"
+REPO="${UI_MODE_REPO:-$HOME/.dotfiles/configs}"
+
+usage() { echo "usage: ui-mode dark|light|fly|cycle|status" >&2; exit 1; }
+
+current() { [ -r "$MODE_FILE" ] && cat "$MODE_FILE" || echo dark; }
+
+# ── the three modes, as data ───────────────────────────────────────────
+# gtk_theme  colour_scheme  kitty_theme  nvim_theme
+settings_for() {
+    case "$1" in
+        dark)  echo "Yaru-dark prefer-dark  theme-dark.conf  carbonfox" ;;
+        light) echo "Yaru      prefer-light theme-dark.conf  carbonfox" ;;
+        fly)   echo "Yaru      prefer-light theme-light.conf dawnfox"   ;;
+        *)     usage ;;
+    esac
+}
+
+apply_gtk() {
+    command -v gsettings >/dev/null 2>&1 || return 0
+    gsettings set org.gnome.desktop.interface gtk-theme "$1" 2>/dev/null || true
+    gsettings set org.gnome.desktop.interface color-scheme "$2" 2>/dev/null || true
+}
+
+apply_kitty() {
+    src="$REPO/kitty/$1"
+    [ -r "$src" ] || return 0
+    # New windows read this on startup.
+    cp "$src" "$KITTY_THEME"
+
+    # Running windows get repainted. kitty appends its pid to the socket name
+    # from `listen_on`, so the configured "@mykitty" never exists as-is — the
+    # real sockets are @mykitty-1234. Enumerate them from /proc/net/unix.
+    command -v kitty >/dev/null 2>&1 || return 0
+    awk '{print $NF}' /proc/net/unix 2>/dev/null \
+      | grep '^@mykitty' \
+      | sort -u \
+      | while read -r sock; do
+            kitty @ --to "unix:$sock" set-colors --all "$src" >/dev/null 2>&1 || true
+        done
+}
+
+apply_nvim() {
+    theme="$1"
+    printf '%s\n' "$theme" > "$THEME_FILE"
+
+    # Push to anything already open. nvim always listens on a socket under
+    # XDG_RUNTIME_DIR, so no --listen flag is needed.
+    command -v nvim >/dev/null 2>&1 || return 0
+    runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    for sock in "$runtime"/nvim.*; do
+        [ -S "$sock" ] || continue
+        nvim --server "$sock" --remote-expr \
+             "execute('silent! colorscheme $theme')" >/dev/null 2>&1 || true
+    done
+}
+
+mode="${1:-}"
+[ -n "$mode" ] || usage
+
+case "$mode" in
+    status) current; exit 0 ;;
+    cycle)
+        case "$(current)" in
+            dark)  mode=light ;;
+            light) mode=fly   ;;
+            *)     mode=dark  ;;
+        esac
+        ;;
+esac
+
+set -- $(settings_for "$mode")
+apply_gtk "$1" "$2"
+apply_kitty "$3"
+apply_nvim "$4"
+
+printf '%s\n' "$mode" > "$MODE_FILE"
+
+command -v notify-send >/dev/null 2>&1 && \
+    notify-send -t 1200 -h string:x-dunst-stack-tag:uimode "UI mode: $mode" || true
+echo "ui-mode: $mode"
