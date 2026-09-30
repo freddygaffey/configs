@@ -217,6 +217,12 @@ terminals, `:colorscheme` pushed to running nvim over its RPC socket, dunst
 killed so D-Bus activation restarts it, and `i3-msg restart` (which keeps your
 layout).
 
+### Desktop background
+
+Each palette can set `wallpaper=/path/to/image.png`. Left unset, the root window
+is filled with the palette's `bg` — a tiling WM shows very little of it, and a
+flat colour that comes from the palette can never clash.
+
 ### Browsers following the mode
 
 Firefox, Chrome and Electron read the XDG portal's `org.freedesktop.appearance`,
@@ -233,6 +239,13 @@ org.freedesktop.impl.portal.Settings=gtk
 Restart both `xdg-desktop-portal.service` and `xdg-desktop-portal-gtk.service`
 after changing it — the GTK backend caches at startup, so restarting only the
 front-end leaves it reporting a stale value.
+
+**Firefox needs its own setting too.** It caches the portal value at startup, and
+more importantly it ignores the system scheme entirely if its theme is pinned:
+check `extensions.activeThemeID` isn't `firefox-compact-light`. Set
+Settings → General → Website appearance → *Automatic*, and
+Add-ons → Themes → *System theme — auto*. Chrome and Electron re-read the portal
+live and need nothing.
 
 ### Two i3 constraints worth knowing
 
