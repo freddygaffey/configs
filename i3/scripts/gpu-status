@@ -24,9 +24,30 @@ fi
 
 command -v nvidia-smi >/dev/null 2>&1 || { printf 'gpu ?'; exit 0; }
 
-# utilisation %, used MiB, total MiB
-read_gpu=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total \
-           --format=csv,noheader,nounits 2>/dev/null | head -1)
+# Rate-limited, and this matters more than it looks. Once the card is awake this
+# script would otherwise run nvidia-smi on every bar refresh, and each call keeps
+# it awake — so the bar alone would stop it ever going back to sleep. That is a
+# ~12 W feedback loop caused purely by watching.
+#
+# 30s of staleness on a utilisation figure is nothing; a GPU that never sleeps is
+# not.
+CACHE="${XDG_RUNTIME_DIR:-/tmp}/gpu-status.cache"
+MAX_AGE=30
+
+cache_fresh() {
+    [ -r "$CACHE" ] || return 1
+    now=$(date +%s)
+    then=$(stat -c %Y "$CACHE" 2>/dev/null || echo 0)
+    [ $((now - then)) -lt "$MAX_AGE" ]
+}
+
+if cache_fresh; then
+    read_gpu=$(cat "$CACHE")
+else
+    read_gpu=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total \
+               --format=csv,noheader,nounits 2>/dev/null | head -1)
+    [ -n "$read_gpu" ] && printf '%s\n' "$read_gpu" > "$CACHE"
+fi
 
 [ -n "$read_gpu" ] || { printf 'gpu ?'; exit 0; }
 
