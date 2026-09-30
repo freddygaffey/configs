@@ -27,19 +27,11 @@ Tailscale is the worked example: `sudo tailscale up --ssh` once, by hand. A scri
 that wraps it either prints the command back at you or demands an auth key in a
 file, both worse than just running it.
 
-`system/sudoers.d/10-fred-ops` is a NOPASSWD allowlist where **every entry must be
-genuinely limited**. Before adding one, check it cannot execute an arbitrary
-command or write an arbitrary path as root — that rule is what keeps `apt`,
-`systemctl`, `tee` and `turbostat` out, and why `rfcomm` is restricted to
-`bind`/`release`/`show`/`connect` (its `listen` and `watch` subcommands run a
-command as root) and `dmidecode` pinned to two arguments (so `--dump-bin` cannot
-be appended). Install only via `visudo -cf` validation before the file reaches
-`/etc`, then `install -m 0440`, then `visudo -c` with rollback. Reasoning lives in
-the sudoers file's own header and `system/README.md`.
+`system/sudoers.d/10-fred-ops` is a NOPASSWD allowlist. One rule when adding an
+entry: it must be unable to execute an arbitrary command or write an arbitrary
+path as root. Per-entry reasoning is in that file's header.
 
-Script output goes in the docs, not the terminal. `legion.sh` prints two lines at
-the end and points at `system/README.md` for verification commands — resist
-growing that back into a wall of text.
+Script output belongs in the docs, not the terminal.
 
 ## Validating changes
 
