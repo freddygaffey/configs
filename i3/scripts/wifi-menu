@@ -13,8 +13,8 @@
 
 set -eu
 
-MENU="rofi -dmenu -i -no-custom -p wifi"
-PASS_MENU="rofi -dmenu -password -p password"
+MENU="rofi -theme $HOME/.config/rofi/theme.rasi -dmenu -i -no-custom -p wifi"
+PASS_MENU="rofi -theme $HOME/.config/rofi/theme.rasi -dmenu -password -p password"
 
 command -v nmcli >/dev/null 2>&1 || { notify-send "nmcli not installed"; exit 1; }
 command -v rofi  >/dev/null 2>&1 || { notify-send "rofi not installed"; exit 1; }

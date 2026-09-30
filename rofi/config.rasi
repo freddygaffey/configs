@@ -1,0 +1,12 @@
+configuration {
+    modi:                "drun,run,window";
+    show-icons:          true;
+    icon-theme:          "Yaru";
+    drun-display-format: "{name}";
+    display-drun:        "apps";
+    display-run:         "run";
+    display-window:      "windows";
+    kb-cancel:           "Escape,Super+d";
+    kb-row-down:         "Down,Control+n";
+    kb-row-up:           "Up,Control+p";
+}

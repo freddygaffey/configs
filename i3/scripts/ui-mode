@@ -207,7 +207,7 @@ render_all() {
     render "$REPO/templates/kitty-theme.template" "$palette" "$HOME/.config/kitty/theme.conf" || true
     render "$REPO/templates/dunstrc.template"     "$palette" "$HOME/.config/dunst/dunstrc" || true
     render "$REPO/templates/tmux-theme.template"  "$palette" "$HOME/.config/tmux/theme.conf" || true
-    render "$REPO/templates/rofi-theme.template"  "$palette" "$HOME/.config/rofi/config.rasi" || true
+    render "$REPO/templates/rofi-theme.template"  "$palette" "$HOME/.config/rofi/theme.rasi" || true
     # Both values on one line: this runs in a command substitution, so the
     # caller reads them back rather than seeing any variable we set.
     printf '%s %s\n' "$(palette_value "$palette" name)" "$i3_changed"

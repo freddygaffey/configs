@@ -1,9 +1,12 @@
-/* GENERATED — do not edit ~/.config/rofi/config.rasi by hand.
+/* GENERATED — do not edit ~/.config/rofi/theme.rasi by hand.
  * Rendered from templates/rofi-theme.template with a themes/<name>.env palette by
  * i3/scripts/ui-mode.
  *
- * Behaviour and colours are in ONE file on purpose: splitting them needed a
- * @theme include, and rofi would not load it from any form tried.
+ * Passed to rofi with -theme on the command line, NOT included from
+ * config.rasi. Two reasons: no include form could be made to work, and theme
+ * rules written into config.rasi are overridden by rofi's own default theme,
+ * which loads afterwards — that is why the launcher rendered white despite the
+ * configuration block being applied.
  *
  * NEVER write a slash-star sequence inside these comments. rofi's rasi parser
  * nests block comments, so one opens a second comment, the closing marker ends
@@ -20,20 +23,6 @@
  * launcher sits on top of the wallpaper, unlike the bar which sits against the
  * screen edge, so it takes far more of the image behind it.
  */
-
-configuration {
-    modi:                "drun,run,window";
-    show-icons:          true;
-    icon-theme:          "Yaru";
-    drun-display-format: "{name}";
-    display-drun:        "apps";
-    display-run:         "run";
-    display-window:      "windows";
-    kb-cancel:           "Escape,Super+d";
-    /* Ctrl-n/p alongside the arrows, matching tmux and readline habits. */
-    kb-row-down:         "Down,Control+n";
-    kb-row-up:           "Up,Control+p";
-}
 
 * {
     bg:       @ui_menu_bg@f5;
