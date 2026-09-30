@@ -96,11 +96,13 @@ sudo rfcomm release 0
 
 ### RAPL counters (step 9)
 
-`/sys/class/powercap/intel-rapl:*/energy_uj` ships `0400 root`. Step 9 grants
-group `adm` read access so power measurement needs neither root nor turbostat.
+`/sys/class/powercap/intel-rapl:*/energy_uj` is the package energy counter — the
+only way to split power draw into CPU vs iGPU vs rest, since
+`BAT1/power_now` reports whole-system only. It ships `0400 root`; step 9 makes it
+readable.
 
-This is a deliberate loosening. Those counters were restricted in response to
-**PLATYPUS (CVE-2020-8694)**, where fine-grained RAPL readings leak enough timing
-information to recover AES keys from another process. On a single-user laptop the
-practical risk is negligible; on a shared or multi-user machine, skip it
-(`SKIP_RAPL=1`).
+A udev rule rather than a `chmod` because sysfs nodes are recreated at boot with
+default permissions — a manual chmod does not persist.
+
+Locked to root originally over CVE-2020-8694. Single-user machine, deliberate
+choice. `SKIP_RAPL=1` to leave it alone.

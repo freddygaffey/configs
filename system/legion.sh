@@ -252,39 +252,30 @@ if [ "${SKIP_SUDOERS:-}" != "1" ]; then
   fi
 fi
 
-# ── 9. Make RAPL power counters readable without root ──────────────────
-# /sys/class/powercap/intel-rapl:*/energy_uj is the package power counter — the
-# only way to attribute draw to CPU vs GPU vs rest. It ships 0400 root, so
-# anything that wants it (a status bar, a logging script) has to go through
-# turbostat as root, and turbostat cannot be allowlisted safely because
-# `turbostat -- <cmd>` runs <cmd> as root.
+# ── 9. Make RAPL power counters readable ───────────────────────────────
+# /sys/class/powercap/intel-rapl:*/energy_uj is the package energy counter — the
+# only way to split draw into CPU vs iGPU vs rest, since BAT1/power_now gives
+# whole-system only. Ships 0400 root, which forces everything through turbostat
+# as root; turbostat can't be sudo-allowlisted because `turbostat -- <cmd>` runs
+# <cmd> as root.
 #
-# Granting group read to 'adm' (which fred is already in) removes the need for
-# either. Battery draw at /sys/class/power_supply/BAT1/power_now is already
-# world-readable; this adds the CPU-side detail.
+# A udev rule rather than a one-off chmod because sysfs nodes are recreated at
+# boot with default permissions — a manual chmod does not survive a reboot.
 #
-# SECURITY NOTE, because this is a deliberate loosening: these counters were
-# restricted to root in response to PLATYPUS (CVE-2020-8694), where fine-grained
-# RAPL readings leak enough timing information to recover AES keys from another
-# process. On a single-user laptop where you are the only member of 'adm' the
-# practical risk is negligible — but it is not zero, and on a multi-user or
-# shared machine you should leave this alone (SKIP_RAPL=1).
+# (These were locked to root over CVE-2020-8694; single-user box, deliberate.)
 #
 # REVERSE: rm /etc/udev/rules.d/99-rapl-readable.rules
-#          then reboot (or re-trigger: sudo udevadm trigger --subsystem-match=powercap)
+#          then reboot, or: sudo udevadm trigger --subsystem-match=powercap
 if [ "${SKIP_RAPL:-}" != "1" ]; then
-  step "9. RAPL power counters readable by group 'adm'"
+  step "9. RAPL power counters readable"
   run "$SUDO tee /etc/udev/rules.d/99-rapl-readable.rules >/dev/null <<'EOF'
-# Managed by configs/system/legion.sh
-# Let group 'adm' read the RAPL energy counters, so power measurement does not
-# need root. See CVE-2020-8694 (PLATYPUS) — this is a deliberate trade-off,
-# acceptable on a single-user machine only.
+# Managed by configs/system/legion.sh — power measurement without root.
 SUBSYSTEM==\"powercap\", KERNEL==\"intel-rapl:*\", ACTION==\"add\", \\
-  RUN+=\"/bin/sh -c 'chgrp adm /sys%p/energy_uj 2>/dev/null; chmod g+r /sys%p/energy_uj 2>/dev/null'\"
+  RUN+=\"/bin/chmod a+r /sys%p/energy_uj\"
 EOF"
   run "$SUDO udevadm control --reload"
   run "$SUDO udevadm trigger --subsystem-match=powercap"
-  info "RAPL counters group-readable — verify: cat /sys/class/powercap/intel-rapl:0/energy_uj"
+  info "RAPL readable — verify: cat /sys/class/powercap/intel-rapl:0/energy_uj"
 fi
 
 step "Done"
