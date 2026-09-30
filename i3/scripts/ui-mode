@@ -116,6 +116,11 @@ apply_kitty() {
       | grep '^@mykitty' | sort -u \
       | while read -r sock; do
             kitty @ --to "unix:$sock" set-colors --all "$kitty_theme" >/dev/null 2>&1 || true
+            # Opacity is not a colour, so set-colors does not carry it — and it
+            # cannot be changed by re-reading the config either. This is the only
+            # way to move it on a running window.
+            [ -n "${1:-}" ] && kitty @ --to "unix:$sock" \
+                set-background-opacity "$1" >/dev/null 2>&1 || true
         done
 }
 
@@ -192,6 +197,7 @@ render_all() {
     cp "$palette" "$resolved"
     grep -q '^term_bg=' "$palette" || printf 'term_bg=%s\n' "$(palette_value "$palette" bg)" >> "$resolved"
     grep -q '^term_fg=' "$palette" || printf 'term_fg=%s\n' "$(palette_value "$palette" fg)" >> "$resolved"
+    grep -q '^term_opacity=' "$palette" || printf 'term_opacity=1.0\n' >> "$resolved"
     palette="$resolved"
     render "$REPO/templates/i3-colours.template"  "$palette" "$HOME/.config/i3/colours.conf" \
         && i3_changed=1
@@ -228,7 +234,7 @@ render_out=$(render_all "$palette")
 nvim_theme=${render_out% *}
 i3_changed=${render_out##* }
 apply_gtk "$gtk_theme" "$colour_scheme"
-apply_kitty
+apply_kitty "$(sed -n "s/^term_opacity=//p" "$palette" | head -1)"
 apply_nvim "${nvim_theme:-$theme}"
 apply_background
 apply_tmux

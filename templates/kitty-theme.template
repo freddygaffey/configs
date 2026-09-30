@@ -1,6 +1,7 @@
 # GENERATED — do not edit ~/.config/kitty/theme.conf by hand.
 # Rendered from templates/kitty-theme.template with a themes/*.env palette by
 # i3/scripts/ui-mode, and included by kitty.conf.
+background_opacity    @term_opacity@
 background            @term_bg@
 foreground            @term_fg@
 cursor                @accent@
