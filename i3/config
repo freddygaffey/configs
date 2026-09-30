@@ -255,7 +255,14 @@ for_window [class="(?i)gnome-system-monitor"] floating enable
 for_window [class="(?i)baobab"]        floating enable
 for_window [class="(?i)gnome-calendar"] floating enable
 for_window [class="(?i)gnome-power-statistics"] floating enable
-for_window [class="(?i)nvtop"]         floating enable
+# Terminals launched by i3/scripts/float-term carry this class. Matching on the
+# program's own name does not work: the window belongs to the terminal, so a TUI
+# started as `kitty -e nvtop` has class "kitty" and any [class="nvtop"] rule is
+# silently ignored — leaving the TUI tiled into a narrow column, where it renders
+# as garbage.
+for_window [class="(?i)floatterm"]     floating enable
+for_window [class="(?i)floatterm"]     resize set 900 600
+for_window [class="(?i)floatterm"]     move position center
 
 # ── Hardware keys (GNOME used to handle these) ─────────────────────────
 # brightnessctl needs no root: the package ships a udev rule granting the

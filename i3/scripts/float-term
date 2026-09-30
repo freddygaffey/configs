@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+# Run a terminal program in a floating window.
+#
+#   float-term nvtop
+#   float-term htop
+#
+# Exists because of a trap: a TUI launched as `terminal -e nvtop` produces a
+# window whose class is the TERMINAL's (kitty), not the program's. An i3 rule
+# matching [class="nvtop"] never fires, the window tiles into whatever column is
+# free, and a TUI in a narrow tile renders as garbage.
+#
+# So set an explicit class that i3 can match on. Both kitty and ghostty support
+# --class; anything else falls back to a plain terminal, which will tile.
+
+set -eu
+
+CLASS="${FLOAT_TERM_CLASS:-floatterm}"
+
+[ $# -gt 0 ] || { echo "usage: float-term <command> [args...]" >&2; exit 1; }
+
+if command -v kitty >/dev/null 2>&1; then
+    exec kitty --class "$CLASS" --title "$1" -e "$@"
+elif command -v ghostty >/dev/null 2>&1; then
+    exec ghostty --class="$CLASS" --title="$1" -e "$@"
+fi
+
+exec "$HOME/.config/i3/scripts/terminal" -e "$@"
