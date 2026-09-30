@@ -213,7 +213,7 @@ offer_system_scripts() {
   # name:description — asked one at a time, because wanting one of these is no
   # reason to want all of them.
   for entry in \
-    "no-suspend:lid close stops suspending (needed to reach this box over ssh)" \
+    "lid-behaviour:lid shut stays up on AC, suspends on battery" \
     "power-on-ac:performance on AC, power-saver on battery (~5-8 W)" \
     "dgpu-sleep:let the dGPU runtime-suspend (~12 W)" \
     "vaapi:hardware video decode (browser: 10-20 W -> 3-5 W)" \
