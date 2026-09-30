@@ -1,8 +1,14 @@
 #!/bin/sh
 # Lid behaviour: stay up on AC, suspend on battery.
 #
-#   plugged in  + lid shut  ->  stays awake, still reachable over ssh
+#   plugged in  + lid shut  ->  stays awake and reachable over ssh, but LOCKS
 #   on battery  + lid shut  ->  suspends, so it does not flatten the pack
+#
+# `lock`, not `ignore`. Staying awake and staying unlocked are separate things,
+# and ignore conflated them: the machine sat there running with the desktop wide
+# open to anyone who lifted the lid. logind's lock action emits the Lock signal,
+# xss-lock picks it up and runs the locker, and the machine keeps running — so
+# ssh still works while physical access does not.
 #
 # Open the lid to get it back; lid-open wakes it from suspend. That is the whole
 # trade: reachable when it costs nothing, asleep when it costs battery.
@@ -32,7 +38,7 @@ sudo tee /etc/systemd/logind.conf.d/10-lid.conf >/dev/null <<'CONF'
 # readable rather than inherited).
 HandleLidSwitch=suspend
 # On AC: stay up, so the box is reachable over ssh with the lid shut.
-HandleLidSwitchExternalPower=ignore
+HandleLidSwitchExternalPower=lock
 # Docked (external monitor attached): stay up.
 HandleLidSwitchDocked=ignore
 CONF
