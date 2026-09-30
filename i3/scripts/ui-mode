@@ -179,6 +179,20 @@ apply_i3() {
 render_all() {
     palette="$1"
     i3_changed=0
+
+    # Optional per-surface overrides. A palette may set term_bg/term_fg to give
+    # the TERMINAL a different shade from the rest of the desktop — useful when a
+    # light theme is right for apps but its background is too bright to stare
+    # into all day. Unset, they fall back to bg/fg, so a palette that does not
+    # care stays a plain list of colours.
+    #
+    # Written to a temp copy rather than the palette itself, so the defaults are
+    # never persisted into a file you edit by hand.
+    resolved="${XDG_RUNTIME_DIR:-/tmp}/ui-palette.$$"
+    cp "$palette" "$resolved"
+    grep -q '^term_bg=' "$palette" || printf 'term_bg=%s\n' "$(palette_value "$palette" bg)" >> "$resolved"
+    grep -q '^term_fg=' "$palette" || printf 'term_fg=%s\n' "$(palette_value "$palette" fg)" >> "$resolved"
+    palette="$resolved"
     render "$REPO/templates/i3-colours.template"  "$palette" "$HOME/.config/i3/colours.conf" \
         && i3_changed=1
     render "$REPO/templates/kitty-theme.template" "$palette" "$HOME/.config/kitty/theme.conf" || true
@@ -187,6 +201,7 @@ render_all() {
     # Both values on one line: this runs in a command substitution, so the
     # caller reads them back rather than seeing any variable we set.
     printf '%s %s\n' "$(palette_value "$palette" name)" "$i3_changed"
+    rm -f "$resolved"
 }
 
 mode="${1:-}"
