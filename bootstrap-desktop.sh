@@ -206,6 +206,17 @@ install_nerd_font() {
 }
 install_nerd_font
 
+# ── 4a2. Tame GNOME apps' remembered window sizes ──────────────────────
+# GNOME apps restore their own geometry AFTER the window is mapped, which
+# overrides i3's `resize set` in a for_window rule — so gnome-system-monitor
+# opened at 2560x1546 (the size it had been maximised to under GNOME) no matter
+# what the i3 rule said. The durable fix is to set the size it remembers.
+if command -v gsettings >/dev/null 2>&1; then
+  gsettings set org.gnome.gnome-system-monitor maximized false 2>/dev/null || true
+  gsettings set org.gnome.gnome-system-monitor window-width 1000 2>/dev/null || true
+  gsettings set org.gnome.gnome-system-monitor window-height 680 2>/dev/null || true
+fi
+
 # ── 4b. Seed the generated theme files ─────────────────────────────────
 # i3's colours and the whole bar block are generated per UI mode from
 # templates/ + themes/. Without ~/.config/i3/colours.conf there is no bar at

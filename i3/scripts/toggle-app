@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# Open an app, or close it if it is already open.
+#
+#   toggle-app <class-regex> <command> [args...]
+#
+# For the bar's click actions: clicking a block opens the relevant window, and
+# clicking the same block again dismisses it. Without this, repeated clicks just
+# stack more windows, or focus one you then have to close by hand.
+#
+# Existence is checked against i3's own tree rather than pgrep, for two reasons:
+# pgrep -x cannot match names longer than 15 characters (gnome-system-monitor is
+# 20), and pgrep -f would match this very script's command line.
+
+set -eu
+
+[ $# -ge 2 ] || { echo "usage: toggle-app <class-regex> <command> [args...]" >&2; exit 1; }
+
+class="$1"
+shift
+
+command -v i3-msg >/dev/null 2>&1 || exec "$@"
+
+if i3-msg -t get_tree 2>/dev/null \
+   | grep -qiE "\"class\": ?\"[^\"]*${class}[^\"]*\""; then
+    i3-msg "[class=\"(?i)${class}\"] kill" >/dev/null 2>&1
+    exit 0
+fi
+
+# Also treat "already starting" as open. gnome-system-monitor takes several
+# seconds to map a window, and without this a second click during that window
+# sees no window in the tree and launches a second copy.
+#
+# $$ and the parent are excluded because this script's own command line contains
+# the program name, so a naive pgrep -f matches itself.
+for pid in $(pgrep -f "$1" 2>/dev/null); do
+    [ "$pid" = "$$" ] && continue
+    [ "$pid" = "$PPID" ] && continue
+    exit 0
+done
+
+exec "$@"

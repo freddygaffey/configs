@@ -25,15 +25,16 @@ bar {
     font pango:JetBrainsMono Nerd Font 10
     tray_output primary
     separator_symbol " | "
-    # Breathing room around the tray icons, which otherwise sit hard against
-    # each other and the clock.
-    tray_padding 6
+    tray_padding 2
     colors {
         # panel, not bg: i3bar has no border option, so the only way to separate
         # the bar from the windows below it is to make it a different shade.
         background @panel@
         statusline @fg@
-        separator  @panel@
+        # dim, NOT panel: the bar's background is panel, so a panel-coloured
+        # separator is invisible and the blocks read as one padded run of text
+        # with no dividers at all.
+        separator  @dim@
         #                  border    background  text
         focused_workspace  @accent@  @accent@    @bg@
         active_workspace   @panel@   @panel@     @fg@

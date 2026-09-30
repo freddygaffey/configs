@@ -30,7 +30,6 @@ import threading
 CONF = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
     "~/.config/i3/i3status.conf")
 GPU = os.path.expanduser("~/.config/i3/scripts/gpu-status")
-BT = os.path.expanduser("~/.config/i3/scripts/bt-status")
 
 # carbonfox, matching the rest of the bar
 GOOD = "#25be6a"
@@ -86,19 +85,6 @@ def helper_block(path, name):
 
 def gpu_block():
     return helper_block(GPU, "gpu")
-
-
-def bt_block():
-    block = helper_block(BT, "bluetooth")
-    if block is None:
-        return None
-    # Dim when there is nothing connected: bluetooth being on is unremarkable,
-    # a device being connected is the part worth noticing.
-    if "off" in block["full_text"] or block["full_text"].endswith("on"):
-        block["color"] = DIM
-    else:
-        block["color"] = ACCENT
-    return block
 
 
 def colour_load(block):
@@ -190,16 +176,6 @@ def transform(blocks):
         colour_gpu(block)
         blocks.insert(index + 1, block)
 
-    # Bluetooth beside wifi and volume, so the system indicators group together.
-    bt = bt_block()
-    if bt is not None:
-        anchor = next((i for i, b in enumerate(blocks)
-                       if b.get("name") == "wireless"), None)
-        if anchor is None:
-            anchor = next((i for i, b in enumerate(blocks)
-                           if b.get("name") == "volume"), len(blocks) - 1)
-        blocks.insert(anchor + 1, bt)
-
     # Theme indicator next to the clock, at the far left.
     mode = ui_mode_block()
     if mode is not None:
@@ -218,22 +194,32 @@ def transform(blocks):
 #
 # Opening a GUI is the honest version of a "dropdown" here — i3bar has no menu
 # primitive, and a real popup would mean drawing our own window.
+TOGGLE = os.path.expanduser("~/.config/i3/scripts/toggle-app")
+
+
+def toggle(class_regex, *command):
+    """Click once to open, click again to dismiss."""
+    return [TOGGLE, class_regex, *command]
+
+
 CLICK_ACTIONS = {
-    ("tztime", 1): ["gnome-calendar"],
+    ("tztime", 1): toggle("gnome-calendar", "gnome-calendar"),
     # CPU, temperature, load, memory and disk all open gnome-system-monitor —
     # one familiar window rather than a different tool per block — just on the
     # tab that matches what was clicked.
-    ("cpu_usage", 1): ["gnome-system-monitor", "--show-resources-tab"],
-    ("cpu_temperature", 1): ["gnome-system-monitor", "--show-resources-tab"],
-    ("load", 1): ["gnome-system-monitor", "--show-processes-tab"],
-    ("memory", 1): ["gnome-system-monitor", "--show-resources-tab"],
-    ("disk_info", 1): ["gnome-system-monitor", "--show-file-systems-tab"],
-    ("volume", 1): ["pavucontrol"],
+    ("cpu_usage", 1): toggle("gnome-system-monitor", "gnome-system-monitor", "-r"),
+    ("cpu_temperature", 1): toggle("gnome-system-monitor", "gnome-system-monitor", "-r"),
+    ("load", 1): toggle("gnome-system-monitor", "gnome-system-monitor", "-p"),
+    ("memory", 1): toggle("gnome-system-monitor", "gnome-system-monitor", "-r"),
+    ("disk_info", 1): toggle("gnome-system-monitor", "gnome-system-monitor", "-f"),
+    ("volume", 1): toggle("pavucontrol", "pavucontrol"),
     # The system indicators open their own managers, which is what the tray
     # icons used to be for.
-    ("wireless", 1): ["nm-connection-editor"],
-    ("bluetooth", 1): ["blueman-manager"],
-    ("battery", 1): ["gnome-power-statistics"],
+    ("wireless", 1): toggle("nm-connection-editor", "nm-connection-editor"),
+    # Right-click the wifi block for Bluetooth: it is the other radio, and it is
+    # no longer in the tray.
+    ("wireless", 3): toggle("blueman-manager", "blueman-manager"),
+    ("battery", 1): toggle("gnome-power-statistics", "gnome-power-statistics"),
     # Volume is the one block where scrolling is the obvious gesture.
     ("volume", 3): ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
     ("volume", 4): ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"],

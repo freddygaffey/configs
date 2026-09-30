@@ -62,7 +62,24 @@ exec --no-startup-id sh -c 'command -v nm-applet >/dev/null && nm-applet'
 
 # Bluetooth tray. Not upstream, but this box pairs a mouse, keyboard and
 # SpaceMouse over BT; `bluetoothctl` is a poor substitute for reconnecting them.
-exec --no-startup-id sh -c 'command -v blueman-applet >/dev/null && blueman-applet'
+# blueman-applet is deliberately NOT started. Its only purpose here was a tray
+# icon, and i3bar orders tray icons by registration order with no way to change
+# it — so Bluetooth kept landing between Discord and Bitwarden instead of with
+# the other system controls. Disabling just the icon via blueman's own plugin
+# list ('!StatusIcon', '!StatusNotifierItem') does not work: blueman-tray starts
+# regardless.
+#
+# The tray is therefore applications only, and Bluetooth is reached from
+# Super+Ctrl+b or by right-clicking the wifi block.
+#
+# Alternatives were checked and are worse here: gnome-control-center refuses to
+# run outside GNOME (and opens no window even with XDG_CURRENT_DESKTOP
+# overridden), blueberry and overskride are not packaged for noble, and bluedevil
+# pulls in 23 KDE packages.
+#
+# Trade-off: with no applet there is no background pairing agent, so pair new
+# devices from blueman-manager itself. Already-paired devices still reconnect —
+# that is bluetoothd's job, not the applet's.
 
 # Polkit authentication agent. Without one, any GUI action needing elevation
 # (mounting a disk, a GNOME settings panel, an updater) fails silently with no
@@ -133,6 +150,14 @@ bindsym $mod+d exec --no-startup-id rofi -show drun
 # File manager. nautilus is GNOME Files; it is already installed with the
 # desktop, so no extra package.
 bindsym $mod+Shift+f exec --no-startup-id nautilus --new-window
+
+# Browser. Firefox by name rather than x-www-browser or xdg-open: on this machine
+# the registered defaults point elsewhere (x-www-browser -> google-chrome-stable,
+# xdg default -> Zen Browser), so "the default browser" would open the wrong one.
+bindsym $mod+Shift+b exec --no-startup-id firefox
+
+# Bluetooth — see the blueman note above for why it is not in the tray.
+bindsym $mod+Ctrl+b exec --no-startup-id blueman-manager
 bindsym $mod+Tab exec --no-startup-id rofi -show window
 
 # Focus
@@ -240,9 +265,6 @@ for_window [window_type="utility"]     floating enable
 for_window [window_type="toolbar"]     floating enable
 for_window [window_type="notification"] floating enable
 for_window [window_type="splash"]      floating enable
-for_window [class="Pavucontrol"]       floating enable
-for_window [class="Blueman-manager"]   floating enable
-for_window [class="Nm-connection-editor"] floating enable
 # Small always-on-top utilities. Tiling these just shoves your real windows
 # around for something you glance at and dismiss.
 for_window [class="(?i)gnome-calculator"] floating enable
@@ -251,18 +273,23 @@ for_window [class="(?i)gnome-calculator"] floating enable
 # Matched case-insensitively with (?i): GTK4 apps report a lowercase WM_CLASS
 # ("gnome-system-monitor") where the older GTK3 ones reported it capitalised
 # ("Gnome-system-monitor"), and which you get varies per app and per release.
-for_window [class="(?i)gnome-system-monitor"] floating enable
-for_window [class="(?i)baobab"]        floating enable
-for_window [class="(?i)gnome-calendar"] floating enable
-for_window [class="(?i)gnome-power-statistics"] floating enable
+# Floating alone is not enough: i3 leaves a floated window at whatever size the
+# app asked for, which for gnome-system-monitor is most of the screen. Give each
+# an explicit size and centre it, so clicking a bar block produces a panel rather
+# than something that swamps the workspace.
+for_window [class="(?i)gnome-system-monitor"] floating enable, resize set 1000 680, move position center
+for_window [class="(?i)baobab"]        floating enable, resize set 900 600, move position center
+for_window [class="(?i)gnome-calendar"] floating enable, resize set 760 620, move position center
+for_window [class="(?i)gnome-power-statistics"] floating enable, resize set 900 600, move position center
+for_window [class="(?i)pavucontrol"]   floating enable, resize set 800 560, move position center
+for_window [class="(?i)blueman-manager"] floating enable, resize set 760 560, move position center
+for_window [class="(?i)nm-connection-editor"] floating enable, resize set 700 520, move position center
 # Terminals launched by i3/scripts/float-term carry this class. Matching on the
 # program's own name does not work: the window belongs to the terminal, so a TUI
 # started as `kitty -e nvtop` has class "kitty" and any [class="nvtop"] rule is
 # silently ignored — leaving the TUI tiled into a narrow column, where it renders
 # as garbage.
-for_window [class="(?i)floatterm"]     floating enable
-for_window [class="(?i)floatterm"]     resize set 900 600
-for_window [class="(?i)floatterm"]     move position center
+for_window [class="(?i)floatterm"]     floating enable, resize set 900 600, move position center
 
 # ── Hardware keys (GNOME used to handle these) ─────────────────────────
 # brightnessctl needs no root: the package ships a udev rule granting the
