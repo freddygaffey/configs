@@ -246,7 +246,7 @@ INTRO
       ;;
   esac
 
-  offer lid-behaviour "Lid shut: stay awake on AC, suspend on battery."
+  offer lid-behaviour "Lid shut: stay awake on AC, suspend on battery. Applies at next boot."
   offer power-on-ac   "Switch the power profile when you plug in or unplug. Around 5-8 W."
   offer dgpu-sleep    "Let the discrete GPU sleep when nothing is using it. Around 12 W."
   offer vaapi         "Hardware video decode. A browser costs 10-20 W without it, 3-5 W with."

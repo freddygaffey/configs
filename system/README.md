@@ -8,7 +8,7 @@ want; they're independent. Every script has its undo in the header comment.
 
 | Script | What |
 |---|---|
-| `lid-behaviour.sh` | Lid shut: stays up on AC (reachable over ssh), suspends on battery |
+| `lid-behaviour.sh` | Lid shut: stays up on AC (reachable over ssh), suspends on battery. Applies at next boot — see the script for why it does not restart logind |
 | `power-on-ac.sh` | udev rule: `performance` on AC, `power-saver` on battery (~5-8 W) |
 | `dgpu-sleep.sh` | Mask `nvidia-persistenced` so the dGPU can runtime-suspend (~12 W) |
 | `vaapi.sh` | Hardware video decode — a browser costs 10-20 W without it, 3-5 W with |

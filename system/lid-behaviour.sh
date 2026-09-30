@@ -14,8 +14,16 @@
 # NB the sleep targets are deliberately NOT masked. Masking them would block the
 # battery case too, which is the half worth keeping.
 #
-# Undo: sudo rm /etc/systemd/logind.conf.d/10-lid.conf
-#       sudo systemctl restart systemd-logind
+# This writes the file and stops. It does NOT restart systemd-logind, which is
+# the obvious way to apply it and also destroys your desktop session: logind
+# loses track of the existing session's device leases ("Session enumeration
+# failed" in the journal), the compositor loses DRM master, and you get a black
+# screen with everything still running behind it. Recovering needs the display
+# manager restarted, which loses the session anyway. logind has no ExecReload on
+# Ubuntu 24.04, so there is no gentler option — the setting simply applies at the
+# next boot.
+#
+# Undo: sudo rm /etc/systemd/logind.conf.d/10-lid.conf   (also next boot)
 set -eu
 sudo mkdir -p /etc/systemd/logind.conf.d
 sudo tee /etc/systemd/logind.conf.d/10-lid.conf >/dev/null <<'CONF'
@@ -28,11 +36,19 @@ HandleLidSwitchExternalPower=ignore
 # Docked (external monitor attached): stay up.
 HandleLidSwitchDocked=ignore
 CONF
-sudo systemctl restart systemd-logind
-echo "lid: suspends on battery, stays up on AC."
-echo
-echo "NB an i9-14900HX running 24 threads with the lid shut is a heat trap."
-echo "   Fine for ssh and light work; prop it open for long builds."
-echo
-echo "Under GNOME, gsd-power can override logind's lid handling. Under i3 there"
-echo "is no such override, so this governs."
+cat <<'DONE'
+Written: /etc/systemd/logind.conf.d/10-lid.conf
+
+  on AC      lid shut -> stays awake, reachable over ssh
+  on battery lid shut -> suspends; open the lid to wake it
+
+Takes effect at the next boot. Nothing was restarted on purpose: restarting
+systemd-logind applies it immediately and blacks out the desktop session, and
+logind has no reload on Ubuntu 24.04.
+
+Two things worth knowing:
+  - An i9-14900HX running 24 threads with the lid shut is a heat trap. Fine for
+    ssh and light work; prop it open for long builds.
+  - Under GNOME, gsd-power can override logind's lid handling. Under i3 nothing
+    overrides it, so this governs.
+DONE
