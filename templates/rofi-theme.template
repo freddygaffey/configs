@@ -15,9 +15,10 @@
  * matches the bar rather than the terminal, and needs no re-render when the
  * mode changes.
  *
- * The alpha suffix on the background (dd = 87%) is what makes it translucent.
- * That needs a compositor: picom is started by i3. Without one it simply renders
- * opaque rather than breaking.
+ * The alpha suffix on the background (f5 = 96%) leaves only a hint of the
+ * wallpaper. 87% was tried first and washed out badly over a bright image — a
+ * launcher sits on top of the wallpaper, unlike the bar which sits against the
+ * screen edge, so it takes far more of the image behind it.
  */
 
 configuration {
@@ -35,8 +36,8 @@ configuration {
 }
 
 * {
-    bg:       @ui_bg@dd;
-    bg-alt:   @ui_panel@ee;
+    bg:       @ui_menu_bg@f5;
+    bg-alt:   @ui_panel@;
     fg:       @ui_fg@;
     accent:   @ui_accent@;
     dim:      @ui_dim@;
