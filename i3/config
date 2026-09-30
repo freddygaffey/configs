@@ -75,6 +75,11 @@ exec --no-startup-id sh -c 'command -v dunst >/dev/null && dunst'
 # Match the panel refresh rate to the power source, and keep matching it.
 exec_always --no-startup-id ~/.config/i3/scripts/refresh-rate-daemon
 
+# Lyrebird's dictation daemon, holding the Whisper model in memory so F9 is
+# instant. `exec` not `exec_always`: reloading i3 should not restart it and throw
+# away a model that took seconds to load.
+exec --no-startup-id sh -c '[ -x "$HOME/lyrebird/.venv/bin/python" ] && cd "$HOME/lyrebird" && exec ./.venv/bin/python src/dictate.py --daemon'
+
 # ── Look — carbonfox, matching tmux/nvim ───────────────────────────────
 set $bg      #161616
 set $fg      #f2f4f8
@@ -229,9 +234,39 @@ bindsym XF86AudioMicMute      exec --no-startup-id pactl set-source-mute @DEFAUL
 bindsym XF86Launch1 exec --no-startup-id ~/.config/i3/scripts/cycle-power-profile
 bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profile
 
-# Screenshots, straight to the clipboard.
-bindsym Print       exec --no-startup-id maim | xclip -selection clipboard -t image/png
-bindsym Shift+Print exec --no-startup-id maim -s | xclip -selection clipboard -t image/png
+# Screenshots — flameshot, on the key with the screenshot icon (Print).
+#   Print        whole screen straight to the clipboard
+#   Shift+Print  drag a region, with annotation tools, then copy or save
+#
+# Under GNOME this key is grabbed by GNOME's own screenshot UI (which is why it
+# never shows up in xev there). i3 sets no such grab, so it reaches these.
+#
+# NB not bound to Super+Shift+4/5 to mirror macOS: those are already "move
+# container to workspace 4/5", which is core i3 and worth more than the muscle
+# memory.
+#
+# Save location, and remembering the last folder you picked, live in
+# ~/.config/flameshot/flameshot.ini — flameshot rewrites that file itself, so it
+# is deliberately not tracked in this repo.
+bindsym Print       exec --no-startup-id flameshot full -c
+bindsym Shift+Print exec --no-startup-id flameshot gui
+
+# Calculator. gnome-calculator ships with Ubuntu and does unit/base conversion,
+# which is most of what this key ever gets used for.
+bindsym F12 exec --no-startup-id gnome-calculator
+bindsym XF86Calculator exec --no-startup-id gnome-calculator
+
+# Lyrebird — offline dictation (~/lyrebird). F9 toggles recording.
+#
+# Two processes on purpose. Loading large-v3-turbo takes seconds, so the model
+# cannot be loaded per keypress: the daemon stays resident holding it, and F9
+# runs a one-shot --toggle that signals the daemon and exits immediately.
+#
+# i3 owns the keybinding rather than Lyrebird grabbing a global hotkey with
+# pynput. That is the standard split, avoids two things fighting over one key,
+# and is the only arrangement that would survive a move to Wayland — where
+# pynput's X11 grab does not work at all.
+bindsym F9 exec --no-startup-id sh -c 'cd "$HOME/lyrebird" && ./.venv/bin/python src/dictate.py --toggle'
 
 # ── Session ────────────────────────────────────────────────────────────
 bindsym $mod+Shift+c reload

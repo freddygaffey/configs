@@ -176,7 +176,10 @@ Bindings not on the card:
 | `Super+p` | cycle power profile |
 | `Super+Ctrl+q` | lock |
 | `Super+bar` / `Super+backslash` | split h / v (tmux-style aliases for `b` / `v`) |
-| `Print` / `Shift+Print` | screenshot, full / region, to clipboard |
+| `Print` | flameshot — whole screen to clipboard |
+| `Shift+Print` | flameshot — drag a region, annotate, copy or save |
+| `F9` | Lyrebird dictation, start/stop |
+| `F12` | calculator |
 
 i3 installs alongside GNOME as a login-screen option; GNOME stays the default
 until you pick otherwise. Everything GNOME did implicitly is wired up explicitly

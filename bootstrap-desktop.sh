@@ -85,11 +85,16 @@ info "Using checkout at $DOTFILES"
 #   blueman              Bluetooth tray (mouse/keyboard/SpaceMouse pair over BT)
 #   policykit-1-gnome    polkit agent — without one, any GUI action needing
 #                        elevation fails silently with no password prompt
-#   maim xclip           screenshot to clipboard
+#   flameshot xclip      screenshots — flameshot for its annotation tools and
+#                        its own "remember where I last saved" handling
+#   gnome-calculator     bound to F12
+#   libportaudio2        the shared library sounddevice dlopens; without it
+#                        Lyrebird's mic capture falls back or fails to import
 #   arandr pavucontrol   GUI display/audio settings, since GNOME's are gone
 #   fonts-*              the bar and terminal font, plus emoji so glyphs render
 PKGS="i3 i3status i3lock rofi dunst brightnessctl xss-lock dex \
-network-manager-gnome blueman policykit-1-gnome maim xclip xdotool \
+network-manager-gnome blueman policykit-1-gnome flameshot xclip xdotool \
+gnome-calculator libportaudio2 \
 arandr pavucontrol feh fonts-jetbrains-mono fonts-noto-color-emoji mosh"
 
 info "Installing desktop packages…"
