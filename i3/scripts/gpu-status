@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+# One line of dGPU status for the i3 bar: utilisation and memory.
+#
+# The important part is what this does NOT do. Running nvidia-smi WAKES the
+# discrete GPU, which costs about 12 W on this machine — roughly 40% of total
+# draw. A status bar polling it every few seconds would hold the GPU awake
+# forever and quietly undo the power work.
+#
+# So: read the PCI runtime power state first, which is a free sysfs read, and
+# only shell out to nvidia-smi when something else has already woken the card.
+# Asleep is reported as asleep rather than as zeroes, because "0%" and "asleep"
+# mean very different things when you are chasing battery drain.
+
+set -u
+
+DEV=/sys/bus/pci/devices/0000:01:00.0/power/runtime_status
+
+[ -r "$DEV" ] || { printf 'gpu n/a'; exit 0; }
+
+if [ "$(cat "$DEV")" != "active" ]; then
+    printf 'gpu zZ'
+    exit 0
+fi
+
+command -v nvidia-smi >/dev/null 2>&1 || { printf 'gpu ?'; exit 0; }
+
+# utilisation %, used MiB, total MiB
+read_gpu=$(nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total \
+           --format=csv,noheader,nounits 2>/dev/null | head -1)
+
+[ -n "$read_gpu" ] || { printf 'gpu ?'; exit 0; }
+
+util=$(printf '%s' "$read_gpu" | cut -d, -f1 | tr -d ' ')
+used=$(printf '%s' "$read_gpu" | cut -d, -f2 | tr -d ' ')
+total=$(printf '%s' "$read_gpu" | cut -d, -f3 | tr -d ' ')
+
+# MiB -> GiB, one decimal. awk rather than shell arithmetic, which is integer only.
+printf 'gpu %s%% %s' "$util" \
+  "$(awk -v u="$used" -v t="$total" 'BEGIN{printf "%.1f/%.0fG", u/1024, t/1024}')"

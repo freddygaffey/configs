@@ -276,9 +276,25 @@ bindsym $mod+p      exec --no-startup-id ~/.config/i3/scripts/cycle-power-profil
 # Working set of keys: savePath, savePathFixed, saveAfterCopy, filenamePattern,
 # showHelp, showDesktopNotification, showMagnifier, disabledTrayIcon, uiColor,
 # contrastUiColor, drawColor.
-bindsym Print            exec --no-startup-id flameshot full -c
-bindsym Shift+Print      exec --no-startup-id flameshot gui
-bindsym Ctrl+Shift+Print exec --no-startup-id flameshot full
+# bindcode, not bindsym, and this is the whole reason: the Print key's shifted
+# level is a different keysym.
+#
+#   keycode 107 = Print  Sys_Req  Print  Sys_Req
+#
+# So Shift+Print produces Sys_Req, `bindsym Shift+Print` never matches, and the
+# plain Print binding fires instead — you press Shift+Print and get a silent
+# full-screen grab rather than the region selector. bindcode matches the physical
+# key and ignores keysym levels entirely.
+#
+# Both 107 and 218 are bound because this machine's keymap defines Print on both
+# (two internal ITE keyboards). Only one is physically present, so nothing
+# double-fires.
+bindcode 107            exec --no-startup-id flameshot full -c
+bindcode Shift+107      exec --no-startup-id flameshot gui
+bindcode Ctrl+Shift+107 exec --no-startup-id flameshot full
+bindcode 218            exec --no-startup-id flameshot full -c
+bindcode Shift+218      exec --no-startup-id flameshot gui
+bindcode Ctrl+Shift+218 exec --no-startup-id flameshot full
 
 # Calculator. gnome-calculator ships with Ubuntu and does unit/base conversion,
 # which is most of what this key ever gets used for.
@@ -313,7 +329,9 @@ bindsym $mod+Shift+e exec --no-startup-id i3-nagbar -t warning \
 
 # ── Bar ────────────────────────────────────────────────────────────────
 bar {
-    status_command i3status -c ~/.config/i3/i3status.conf
+    # Wrapped rather than calling i3status directly: i3status has no "run this
+    # command" module, so scripts/status splices a GPU block into its JSON.
+    status_command ~/.config/i3/scripts/status ~/.config/i3/i3status.conf
     position top
     tray_output primary
     separator_symbol " | "

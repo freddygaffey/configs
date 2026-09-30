@@ -1,0 +1,50 @@
+#!/usr/bin/env sh
+# i3bar status_command: i3status, with a GPU block spliced in.
+#
+# i3status has no "run this command" module, so the documented way to add one is
+# to wrap it and edit its JSON on the way past. The protocol is:
+#
+#   {"version":1,...}        header, once
+#   [                        opening bracket of an infinite array, once
+#   [{...},{...}]            one line per refresh
+#   ,[{...},{...}]           every subsequent line, comma-prefixed
+#
+# So: pass the first two lines through untouched, then for each later line strip
+# the leading comma and '[', and re-emit with our block inserted at the front.
+#
+# IFS= and read -r so a block's text is never mangled by whitespace or
+# backslashes.
+
+set -u
+
+CONF="${1:-$HOME/.config/i3/i3status.conf}"
+GPU="$HOME/.config/i3/scripts/gpu-status"
+
+i3status -c "$CONF" | {
+    # Header line, then the opening '['.
+    IFS= read -r line && printf '%s\n' "$line"
+    IFS= read -r line && printf '%s\n' "$line"
+
+    while IFS= read -r line; do
+        prefix=''
+        case "$line" in
+            ,*)
+                prefix=','
+                line=${line#,}
+                ;;
+        esac
+
+        if [ -x "$GPU" ]; then
+            gpu=$("$GPU" 2>/dev/null)
+        else
+            gpu=''
+        fi
+
+        if [ -n "$gpu" ]; then
+            printf '%s[{"name":"gpu","full_text":"%s"},%s\n' \
+                   "$prefix" "$gpu" "${line#[}"
+        else
+            printf '%s%s\n' "$prefix" "$line"
+        fi
+    done
+}
