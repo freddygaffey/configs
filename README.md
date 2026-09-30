@@ -228,6 +228,7 @@ sits behind.
 | | |
 |---|---|
 | `Super+Shift+i` | next wallpaper |
+| `Super+Shift+u` | previous wallpaper |
 | `Super+Ctrl+i` | random |
 | systemd user timer | every 30 min — `systemctl --user enable --now wallpaper.timer` |
 
