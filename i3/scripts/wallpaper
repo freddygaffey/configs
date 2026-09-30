@@ -85,7 +85,8 @@ list() {
 # that actually have a sidecar are ever read.
 exclude_filter() {
     while IFS= read -r f; do
-        if [ -r "$f.json" ] && grep -q '"exclude"[[:space:]]*:[[:space:]]*true' "$f.json" 2>/dev/null; then
+        r=$(readlink -f "$f" 2>/dev/null || printf '%s' "$f")
+        if [ -r "$r.json" ] && grep -q '"exclude"[[:space:]]*:[[:space:]]*true' "$r.json" 2>/dev/null; then
             continue
         fi
         printf '%s\n' "$f"
@@ -153,7 +154,12 @@ display_size() {
 # otherwise land on every next/prev, every mode switch and every i3 restart.
 render_for_display() {
     image="$1"
-    sidecar="$image.json"
+    # Resolve symlinks first. dark/ and light/ are directories of links into
+    # all/, and the sidecar is written next to the REAL file — so looking for
+    # "$image.json" beside the link finds nothing, and every bit of framing was
+    # silently ignored for exactly the paths this script actually uses.
+    real=$(readlink -f "$image" 2>/dev/null || printf '%s' "$image")
+    sidecar="$real.json"
     [ -r "$sidecar" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
 
@@ -187,8 +193,8 @@ render_for_display() {
     # Everything past here needs pixels changed.
     command -v convert >/dev/null 2>&1 || return 0
 
-    mtime=$(stat -c %Y "$image" 2>/dev/null || echo 0)
-    key=$(printf '%s %s %s %s' "$image" "$mtime" "$disp" "$entry" | sha1sum | cut -c1-16)
+    mtime=$(stat -c %Y "$real" 2>/dev/null || echo 0)
+    key=$(printf '%s %s %s %s' "$real" "$mtime" "$disp" "$entry" | sha1sum | cut -c1-16)
     cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/i3-wallpaper"
     out="$cache_dir/$key.png"
 
@@ -238,6 +244,17 @@ render_for_display() {
     fi
 }
 
+# Force the compositor to repaint the root window.
+#
+# feh swaps the root pixmap, but picom does not always notice: the old wallpaper
+# can stay on part of the screen until something else causes a redraw, which
+# looks like two different images side by side on an empty workspace. xrefresh
+# clears and re-exposes every window, which costs nothing perceptible and makes
+# the swap reliable.
+repaint() {
+    command -v xrefresh >/dev/null 2>&1 && xrefresh >/dev/null 2>&1 || true
+}
+
 apply() {
     image="$1"
     if [ -r "$image" ] && command -v feh >/dev/null 2>&1; then
@@ -262,6 +279,7 @@ apply() {
             if [ -r "$target" ]; then
                 feh --no-fehbg --image-bg "${bg:-#161616}" "$flag" "$target" \
                     >/dev/null 2>&1 && printf '%s\n' "$image" > "$STATE"
+                repaint
                 return 0
             fi
         fi
@@ -269,6 +287,7 @@ apply() {
         # this script's own state file for "what is the current wallpaper".
         feh --no-fehbg --image-bg "${bg:-#161616}" "$mode" "$image" >/dev/null 2>&1 \
             && printf '%s\n' "$image" > "$STATE"
+        repaint
     else
         fallback
     fi
