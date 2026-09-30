@@ -95,7 +95,7 @@ info "Using checkout at $DOTFILES"
 PKGS="i3 i3status i3lock rofi dunst brightnessctl xss-lock dex \
 network-manager-gnome blueman policykit-1-gnome flameshot xclip xdotool \
 gnome-calculator libportaudio2 \
-arandr pavucontrol feh fonts-jetbrains-mono fonts-noto-color-emoji mosh"
+arandr pavucontrol feh fonts-jetbrains-mono fonts-noto-color-emoji mosh picom"
 
 info "Installing desktop packages…"
 $SUDO apt-get update -y
@@ -171,6 +171,7 @@ link "$DOTFILES/i3/scripts"        "$HOME/.config/i3/scripts"
 link "$DOTFILES/ghostty/config"    "$HOME/.config/ghostty/config"
 link "$DOTFILES/xresources"        "$HOME/.Xresources"
 link "$DOTFILES/kitty/kitty.conf" "$HOME/.config/kitty/kitty.conf"
+link "$DOTFILES/picom/picom.conf"  "$HOME/.config/picom.conf"
 mkdir -p "$HOME/.config/systemd/user"
 link "$DOTFILES/systemd/wallpaper.service" "$HOME/.config/systemd/user/wallpaper.service"
 link "$DOTFILES/systemd/wallpaper.timer"   "$HOME/.config/systemd/user/wallpaper.timer"

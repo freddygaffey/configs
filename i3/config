@@ -101,6 +101,14 @@ exec_always --no-startup-id ~/.config/i3/scripts/input-setup
 # Match the panel refresh rate to the power source, and keep matching it.
 exec_always --no-startup-id ~/.config/i3/scripts/refresh-rate-daemon
 
+# Compositor. i3 has none, so without picom nothing acts on window opacity and
+# there is no way to show focus other than the border. Config is deliberately
+# minimal — no blur, shadows or fading, all of which cost power for decoration.
+#
+# exec_always with a guard: `--replace` would be wrong here (it restarts picom on
+# every i3 reload, flashing the screen), so only start it if it is not running.
+exec_always --no-startup-id sh -c 'command -v picom >/dev/null && (pgrep -x picom >/dev/null || picom --config ~/.config/picom.conf -b)'
+
 # Re-apply the wallpaper. i3 does not own the root window's contents, so a
 # restart leaves whatever was there — which is fine, except after a mode switch.
 exec_always --no-startup-id ~/.config/i3/scripts/wallpaper reapply
@@ -134,8 +142,8 @@ gaps outer 0
 # A little air under the bar, so windows do not butt straight up against it.
 gaps top 2
 smart_gaps on
-default_border pixel 3
-default_floating_border pixel 3
+default_border pixel 2
+default_floating_border pixel 2
 
 # NB there is deliberately no `smart_borders` line. Off is the default, and the
 # option only accepts enabling values — `smart_borders off` is a parse error, not
