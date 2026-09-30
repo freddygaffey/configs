@@ -167,11 +167,14 @@ def transform(blocks):
 # primitive, and a real popup would mean drawing our own window.
 CLICK_ACTIONS = {
     ("tztime", 1): ["gnome-calendar"],
+    # CPU, temperature, load, memory and disk all open gnome-system-monitor —
+    # one familiar window rather than a different tool per block — just on the
+    # tab that matches what was clicked.
     ("cpu_usage", 1): ["gnome-system-monitor", "--show-resources-tab"],
     ("cpu_temperature", 1): ["gnome-system-monitor", "--show-resources-tab"],
     ("load", 1): ["gnome-system-monitor", "--show-processes-tab"],
     ("memory", 1): ["gnome-system-monitor", "--show-resources-tab"],
-    ("disk_info", 1): ["baobab"],
+    ("disk_info", 1): ["gnome-system-monitor", "--show-file-systems-tab"],
     ("volume", 1): ["pavucontrol"],
     ("battery", 1): ["gnome-power-statistics"],
     # Volume is the one block where scrolling is the obvious gesture.

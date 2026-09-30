@@ -230,13 +230,17 @@ for_window [class="Blueman-manager"]   floating enable
 for_window [class="Nm-connection-editor"] floating enable
 # Small always-on-top utilities. Tiling these just shoves your real windows
 # around for something you glance at and dismiss.
-for_window [class="gnome-calculator"]  floating enable
-for_window [class="Gnome-calculator"]  floating enable
+for_window [class="(?i)gnome-calculator"] floating enable
 # Opened by clicking a bar block — glance-and-dismiss, so they float too.
-for_window [class="Gnome-system-monitor"] floating enable
-for_window [class="Baobab"]            floating enable
-for_window [class="Gnome-calendar"]    floating enable
-for_window [class="Gnome-power-statistics"] floating enable
+#
+# Matched case-insensitively with (?i): GTK4 apps report a lowercase WM_CLASS
+# ("gnome-system-monitor") where the older GTK3 ones reported it capitalised
+# ("Gnome-system-monitor"), and which you get varies per app and per release.
+for_window [class="(?i)gnome-system-monitor"] floating enable
+for_window [class="(?i)baobab"]        floating enable
+for_window [class="(?i)gnome-calendar"] floating enable
+for_window [class="(?i)gnome-power-statistics"] floating enable
+for_window [class="(?i)nvtop"]         floating enable
 
 # ── Hardware keys (GNOME used to handle these) ─────────────────────────
 # brightnessctl needs no root: the package ships a udev rule granting the
