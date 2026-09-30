@@ -1,0 +1,10 @@
+[Unit]
+Description=Tell the user the Lyrebird dictation daemon has failed
+Documentation=https://github.com/freddygaffey/configs
+
+[Service]
+# Triggered by OnFailure= in lyrebird.service. The daemon once died on a config
+# error and nothing said so; F9 just did nothing. The notification carries the
+# last line of the Python traceback, which is the actual reason.
+Type=oneshot
+ExecStart=/bin/sh -c 'why=$(journalctl --user -u lyrebird -n 40 -o cat --no-pager | grep -v "^lyrebird.service" | tail -1); notify-send -u critical "Lyrebird dictation is down" "${why:-see journalctl}\nDetails: journalctl --user -u lyrebird"'

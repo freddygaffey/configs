@@ -182,6 +182,13 @@ link "$DOTFILES/picom/picom.conf"  "$HOME/.config/picom.conf"
 mkdir -p "$HOME/.config/systemd/user"
 link "$DOTFILES/systemd/wallpaper.service" "$HOME/.config/systemd/user/wallpaper.service"
 link "$DOTFILES/systemd/wallpaper.timer"   "$HOME/.config/systemd/user/wallpaper.timer"
+# Lyrebird's dictation daemon. Enabled here (unlike the wallpaper timer) because
+# F9 is bound unconditionally: with no daemon it silently does nothing, which is
+# how a dead daemon went unnoticed before it was a supervised service. Guarded so
+# a box without a Lyrebird checkout does not gain a unit that can only fail;
+# the resolver looks in the same places, LYREBIRD_DIR aside.
+link "$DOTFILES/systemd/lyrebird.service"        "$HOME/.config/systemd/user/lyrebird.service"
+link "$DOTFILES/systemd/lyrebird-failed.service" "$HOME/.config/systemd/user/lyrebird-failed.service"
 # Wallpaper directories, so `wallpaper status` has somewhere to point at. The
 # timer is NOT enabled here — rotation is opt-in:
 #   systemctl --user enable --now wallpaper.timer
@@ -189,6 +196,20 @@ mkdir -p "$HOME/Pictures/Wallpapers/all" "$HOME/Pictures/Wallpapers/dark" "$HOME
 systemctl --user daemon-reload 2>/dev/null || true
 
 chmod +x "$DOTFILES"/i3/scripts/* 2>/dev/null || true
+
+have_lyrebird=""
+for d in "${LYREBIRD_DIR:-}" "$HOME/junkcode/lyrebird" "$HOME/lyrebird" "$HOME/src/lyrebird" "$HOME/code/lyrebird"; do
+  [ -n "$d" ] && [ -f "$d/src/dictate.py" ] && have_lyrebird=1 && break
+done
+if [ -n "$have_lyrebird" ]; then
+  # No --now: there is no DISPLAY in the user manager until i3 imports it, and
+  # i3's config starts the unit at that point. Enabling covers later logins.
+  systemctl --user enable lyrebird.service 2>/dev/null \
+    && info "enabled lyrebird.service" \
+    || warn "Could not enable lyrebird.service (no user systemd session?) — run: systemctl --user enable lyrebird"
+else
+  warn "No Lyrebird checkout found — dictation daemon not enabled. Clone it, then: systemctl --user enable --now lyrebird"
+fi
 
 # ── 4a. Nerd Font ──────────────────────────────────────────────────────
 # Ubuntu's fonts-jetbrains-mono is the UNPATCHED build. nvim-tree and lualine

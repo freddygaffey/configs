@@ -129,10 +129,17 @@ exec_always --no-startup-id ~/.config/i3/scripts/wallpaper reapply
 # else started as a user unit) can talk to X. Without this feh has no display.
 exec_always --no-startup-id systemctl --user import-environment DISPLAY XAUTHORITY
 
-# Lyrebird's dictation daemon, holding the Whisper model in memory so F9 is
-# instant. `exec` not `exec_always`: reloading i3 should not restart it and throw
-# away a model that took seconds to load.
-exec --no-startup-id ~/.config/i3/scripts/dictate --daemon
+# Lyrebird's dictation daemon is a systemd USER service (systemd/lyrebird.service),
+# not an i3 child. The old `exec ... dictate --daemon` gave no supervision: the
+# daemon died on a config error, its output was lost to pipe buffering, and F9
+# just did nothing. Now systemd restarts it and `journalctl --user -u lyrebird`
+# shows why. i3 only nudges it to start. The import is repeated in the same
+# shell command because exec_always lines run concurrently: a separate import
+# line could lose the race and the unit would start with no DISPLAY. Starting an
+# already-running unit is a no-op, so an i3 restart does not reload the model.
+# The unit also hangs off default.target for later logins, but that can fire
+# before X is up (it then skips itself via ConditionEnvironment=DISPLAY).
+exec_always --no-startup-id sh -c 'systemctl --user import-environment DISPLAY XAUTHORITY && systemctl --user start --no-block lyrebird.service'
 
 # ── Look ───────────────────────────────────────────────────────────────
 # Window colours and the whole bar block are generated per UI mode into
@@ -436,7 +443,7 @@ bindcode Ctrl+Shift+218 exec --no-startup-id flameshot full
 bindsym F12 exec --no-startup-id gnome-calculator
 bindsym XF86Calculator exec --no-startup-id gnome-calculator
 
-# Lyrebird — offline dictation (~/lyrebird). F9 toggles recording.
+# Lyrebird — offline dictation. F9 toggles recording.
 #
 # Two processes on purpose. Loading large-v3-turbo takes seconds, so the model
 # cannot be loaded per keypress: the daemon stays resident holding it, and F9

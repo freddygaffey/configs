@@ -1,0 +1,43 @@
+[Unit]
+Description=Lyrebird dictation daemon (resident Whisper model)
+Documentation=https://github.com/freddygaffey/configs
+# Skip cleanly on a login with no X session (ssh, tty) rather than crash-loop:
+# the daemon types through X, so without DISPLAY it can do nothing useful.
+ConditionEnvironment=DISPLAY
+# Belongs in [Unit], not [Service] (there it is silently ignored and the unit
+# restarts forever): after 5 failed starts in 2 minutes systemd stops trying and
+# leaves the unit in "failed", which is what `systemctl --user status` and any
+# failed-units check can actually report.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+# `status` only shows systemd's own lines once the process is gone; the actual
+# Python error is in the journal. Pop a notification pointing there, so a dead
+# daemon is not discovered by F9 silently doing nothing.
+OnFailure=lyrebird-failed.service
+
+[Service]
+# Started from i3 (see the `systemctl --user start lyrebird` line in i3/config)
+# and by default.target on later logins. NOT WantedBy=graphical-session.target:
+# i3 does not activate that target, so a unit hooked to it never starts here.
+#
+# The resolver, not the checkout, so this unit survives Lyrebird moving again
+# (it already went ~/lyrebird -> ~/junkcode/lyrebird).
+ExecStart=%h/.config/i3/scripts/dictate --daemon
+
+# Python block-buffers stdout when it is not a tty, so under systemd every
+# print() sat in a buffer and `journalctl --user -u lyrebird` stayed empty —
+# which is exactly how the last config error went unseen.
+Environment=PYTHONUNBUFFERED=1
+
+# DISPLAY/XAUTHORITY are NOT set here: the user manager gets them from i3's
+# `systemctl --user import-environment DISPLAY XAUTHORITY`, which i3 runs
+# before starting this unit. Hardcoding :0 and gdm's Xauthority path would rot.
+
+# on-failure, not always: a clean exit (stopped on purpose) stays stopped.
+# The 5s pause plus the start limit (see [Unit]) stops a broken config from
+# spinning the CPU reloading a multi-second model.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
