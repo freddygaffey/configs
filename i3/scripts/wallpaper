@@ -138,8 +138,14 @@ case "${1:-next}" in
         ;;
     reapply)
         cur=$(current)
-        # After a mode switch the stored image may be in the other directory.
-        if [ -n "$cur" ] && list | grep -qxF "$cur"; then apply "$cur"; else step next; fi
+        # If the current image is still valid for this mode, it is ALREADY on
+        # screen — re-running feh would decode a 12 MB PNG again for no visible
+        # change, and that was ~690ms of every mode switch. Only act when the
+        # image does not belong to the new mode's directory.
+        if [ -n "$cur" ] && list | grep -qxF "$cur"; then
+            exit 0
+        fi
+        step next
         ;;
     set)  [ $# -ge 2 ] || { echo "usage: wallpaper set <file>" >&2; exit 1; }; apply "$2" ;;
     status) printf 'mode=%s dir=%s count=%s current=%s\n' \
