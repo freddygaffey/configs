@@ -22,7 +22,7 @@ Server-specific — for a laptop acting as a home server, not the machine you ca
 | Script | What |
 |---|---|
 | `server-always-on.sh` | Lid shut keeps it up and masks the sleep targets. Use **instead of** `lid-behaviour.sh` |
-| `containers.sh` | Rootless podman, and `enable-linger` so containers survive logout |
+| `containers.sh` | Docker from Docker's own repo, with compose v2 |
 | `auto-updates.sh` | Unattended security updates |
 
 A server laptop otherwise takes the same path as any desktop:
