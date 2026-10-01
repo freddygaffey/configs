@@ -3,7 +3,14 @@ Description=Rotate the desktop wallpaper periodically
 
 [Timer]
 # First rotation shortly after login, then every 30 minutes.
-OnStartupSec=2min
+# OnActiveSec, not OnStartupSec. OnStartupSec counts from when the systemd USER
+# MANAGER started — which on a long-running session was hours ago, so the moment
+# has passed and no next trigger is ever scheduled. The timer then sits active
+# with NEXT and LEFT both showing "-", looking fine while doing nothing.
+#
+# OnActiveSec counts from when the timer itself is activated, which is what we
+# actually mean: first rotation two minutes after login, then every 30 minutes.
+OnActiveSec=2min
 OnUnitActiveSec=30min
 # Don't fire a backlog of missed rotations after the machine has been asleep.
 Persistent=false
