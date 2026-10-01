@@ -17,6 +17,19 @@ want; they're independent. Every script has its undo in the header comment.
 | `tracker-scope.sh` | Stop tracker indexing ~600 GB of archives and corpora |
 | `battery-conservation.sh on\|off` | Cap charge at ~60% for an always-plugged host |
 
+Server-specific — for a laptop acting as a home server, not the machine you carry:
+
+| Script | What |
+|---|---|
+| `server-always-on.sh` | Lid shut keeps it up and masks the sleep targets. Use **instead of** `lid-behaviour.sh` |
+| `containers.sh` | Rootless podman, and `enable-linger` so containers survive logout |
+| `auto-updates.sh` | Unattended security updates |
+
+A server laptop otherwise takes the same path as any desktop:
+`bootstrap-desktop.sh` for the terminal layer and i3, then these three instead of
+the power ones. There is no separate server bootstrap — it would duplicate the
+desktop one to add three files.
+
 ## sudoers
 
 `sudoers.d/10-fred-ops` is a small NOPASSWD allowlist: `powerprofilesctl`,
